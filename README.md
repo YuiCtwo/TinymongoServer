@@ -7,6 +7,3 @@ An extension version of [Tinymongo](https://github.com/schapman1974/tinymongo) w
 Thanks to these great projects, our work is build on top of them:
 
 - [Tinymongo](https://github.com/schapman1974/tinymongo)
-- [Owner avatar
-python-mysql-replication
-](https://github.com/julien-duponchelle/python-mysql-replication/tree/main)
