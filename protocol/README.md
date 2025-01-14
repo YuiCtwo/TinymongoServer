@@ -59,5 +59,12 @@ struct MsgHeader {
 
 ### OP_UPDATE
 
+## BSON Document & Collection
+
+文档是 MongoDB 的基本数据单元，使用 BSON 格式存储。一个文档包含了一组键值对，类似于 JSON 对象。
+如： `{"name": "John", "age": 30, "city": "New York"}`
+
+而集合（Collection）则是文档的一个集合，类似于关系型数据库中的表（Table）。每个集合可以包含多个文档，而集合本身不需要预定义其结构。
+
 ## 参考
 - [MongoDB Wire Protocol](https://www.mongodb.com/zh-cn/docs/manual/reference/mongodb-wire-protocol/)

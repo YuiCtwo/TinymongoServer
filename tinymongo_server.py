@@ -11,7 +11,11 @@ class TinyMongoServer:
     def __init__(self, host='127.0.0.1', port=27017):
         self.host = host
         self.port = port
-        self.backend = TinyMongoClient()
+        # get an instance of database in tinymongo
+        # see example in https://github.com/schapman1974/tinymongo
+        connection = TinyMongoClient()
+        self.backend = connection.tiny_database
+        #
         self.logger = server_logger
         self.head_handler = HeadHandler()
         # demo list that stores allowed commands
@@ -41,16 +45,19 @@ class TinyMongoServer:
             data = client_socket.recv(1024)
             header = self.head_handler.do_parse(data)
             op_code = header["op_code"]
+            # TODO: do we need to generate request_id by ourselves?
+            request_id = header["request_id"]
+            response_to = header["response_to"]
             if op_code in self.allowed_commands:
                 handler = self.allowed_commands[op_code]
                 payload = handler.do_parse(data)
                 response = handler.do_handle(payload, self.backend)
             else:
-                # handle unknown commands
                 response = {}
-            # tester build response
-            response_raw = self.response_parse(1, 1, response)
-            client_socket.send(response_raw)
+            # some of the command may not need to return any response
+            if len(response.keys()) != 0:
+                response_raw = self.response_parse(response_to, request_id, response)
+                client_socket.send(response_raw)
 
         except ConnectionResetError:
             self.logger.info(f"IP {self.server_socket.getpeername()[0]} disconnected")
