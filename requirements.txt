@@ -1,2 +1,0 @@
-tinymongo==0.2.0
-bson==0.5.10
