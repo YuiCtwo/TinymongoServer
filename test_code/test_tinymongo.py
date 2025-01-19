@@ -61,6 +61,9 @@ def test_insert_many(collection_setup):
     print(insert_many_result.eids)
     assert True
 
+def test_query(collection_setup):
+    collection = collection_setup[0]
+
 
 if __name__ == '__main__':
     pytest.main()

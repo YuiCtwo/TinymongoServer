@@ -14,7 +14,7 @@ class TinyMongoServer:
         # get an instance of database in tinymongo
         # see example in https://github.com/schapman1974/tinymongo
         connection = TinyMongoClient()
-        self.backend = connection.tiny_database
+        self.backend = connection
         #
         self.logger = server_logger
         self.head_handler = HeadHandler()
