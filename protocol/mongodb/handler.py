@@ -2,7 +2,7 @@ import struct
 import bson
 
 from utils.logger import server_logger
-from protocol.mongodb.op_code import OpCode
+from protocol.op_code import OpCode
 
 def arry2flag(arr):
     """
@@ -14,7 +14,6 @@ def arry2flag(arr):
     for idx, one in enumerate(arr):
         result += (int(one) << idx)
     return result
-
 
 def byte2string(data, offset):
     """
@@ -30,6 +29,26 @@ def byte2string(data, offset):
         offset += 1
     return offset+1, full_str
 
+def byte2int32(data, offset):
+    """
+    Convert byte data to integer.
+    :param data: byte data
+    :param offset: pointer to the start of the integer
+    :return: pointer to the end of the integer and the integer
+    """
+    integer = struct.unpack("<i", data[offset:offset+4])[0]
+    return offset+4, integer
+
+def byte2int64(data, offset):
+    """
+    Convert byte data to integer.
+    :param data: byte data
+    :param offset: pointer to the start of the integer
+    :return: pointer to the end of the integer and the integer
+    """
+    integer = struct.unpack("<q", data[offset:offset+8])[0]
+    return offset+8, integer
+
 def byte2document(data, offset):
     """
     Covert byte data to dict object in Python
@@ -40,7 +59,7 @@ def byte2document(data, offset):
     doc_length = struct.unpack("<i", data[offset: offset+4])[0]
     document = bson.loads(data[offset: offset+doc_length])
     offset += doc_length
-    return document, offset
+    return offset, document
 
 class HeadHandler:
 
@@ -68,7 +87,7 @@ class MongoDBHandler:
         :return: json object contains the request payload
         """
         # DO NOT USE THIS METHOD, IT IS JUST A PLACEHOLDER
-        return bson.loads(data[16:])
+        return bson.loads(data)
 
     def do_handle(self, payload: dict, backend) -> dict:
         """
@@ -79,12 +98,6 @@ class MongoDBHandler:
         # if no response required, return empty dict
         return {}
 
-class CompressedHandler(MongoDBHandler):
-    pass
-
-class MSGHandler(MongoDBHandler):
-    pass
-
 class InsertHandler(MongoDBHandler):
 
     def __init__(self):
@@ -94,12 +107,11 @@ class InsertHandler(MongoDBHandler):
 
     def do_parse(self, data):
         offset = 16
-        flag = struct.unpack("<i", data[offset:offset+4])[0]
-        offset += 4
-        full_collection_name, offset = byte2string(data, offset)
+        offset, flag = byte2int32(data, offset)
+        offset, full_collection_name = byte2string(data, offset)
         documents = []
         while offset < len(data):
-            document, offset = byte2document(data, offset)
+            offset, document = byte2document(data, offset)
             documents.append(document)
 
         return {
@@ -124,16 +136,125 @@ class InsertHandler(MongoDBHandler):
 
 
 class UpdateHandler(MongoDBHandler):
-    pass
+
+    def __init__(self):
+        super().__init__()
+        self.op_code = OpCode.OP_UPDATE
+        self.supported_version = 5.0
+
+    def do_parse(self, data):
+        offset = 16
+        offset, zero = byte2int32(data, offset)
+        offset, full_collection_name = byte2string(data, offset)
+        offset, flags = byte2int32(data, offset)
+        offset, selector = byte2document(data, offset)
+        offset, update = byte2document(data, offset)
+        return {
+            "flags": flags,
+            "fullCollectionName": full_collection_name,
+            "selector": selector,
+            "update": update,
+        }
+
+    def do_handle(self, payload: dict, backend) -> dict:
+        flags = payload["flags"]
+        full_collection_name = payload["fullCollectionName"]
+        db_name, table_name = full_collection_name.split(".")
+        collection = getattr(backend, db_name)
+        table = getattr(collection, table_name)
+        selector = payload["selector"]
+        update = payload["update"]
+        if flags == 1:
+            # update or insert
+            if len(backend.find(selector)) == 0:
+                # insert
+                table.insert_one(update)
+        elif flags == (1 << 1):
+            # It seems that TinyMongo may not support multi-update
+            table.update(selector, update, multi=True)
+        else:
+            table.update(selector, update)
+        return {}
 
 class DeleteHandler(MongoDBHandler):
-    pass
+
+    def __init__(self):
+        super().__init__()
+        self.op_code = OpCode.OP_DELETE
+        self.supported_version = 5.0
+
+    def do_parse(self, data):
+        offset = 16
+        # `zero` is reserved for future use
+        offset, zero = byte2int32(data, offset)
+        offset, full_collection_name = byte2string(data, offset)
+        offset, flags = byte2int32(data, offset)
+        documents = []
+        while offset < len(data):
+            offset, document = byte2document(data, offset)
+            documents.append(document)
+        return {
+            "flags": flags,
+            "fullCollectionName": full_collection_name,
+            "documents": documents
+        }
+
+    def do_handle(self, payload: dict, backend) -> dict:
+        flag = payload["flags"]
+        full_collection_name = payload["fullCollectionName"]
+        db_name, table_name = full_collection_name.split(".")
+        collection = getattr(backend, db_name)
+        table = getattr(collection, table_name)
+        documents = payload["documents"]
+        for document in documents:
+            table.remove(document, multi=bool(flag))
+        return {}
+
 
 class GetMoreHandler(MongoDBHandler):
-    pass
+
+    def __init__(self):
+        super().__init__()
+        self.op_code = OpCode.OP_GET_MORE
+        self.supported_version = 5.0
+
+    def do_parse(self, data):
+        offset = 16
+        offset, zero = byte2int32(data, offset)
+        offset, full_collection_name = byte2string(data, offset)
+        offset, number_to_return = byte2int32(data, offset)
+        offset, cursor_id = byte2int64(data, offset)
+        return {
+            "fullCollectionName": full_collection_name,
+            "numberToReturn": number_to_return,
+            "cursorID": cursor_id
+        }
+
+    def do_handle(self, payload: dict, backend) -> dict:
+        raise NotImplementedError("Don't support GetMore operation yet for TinyMongo backend.")
 
 class KillCursorsHandler(MongoDBHandler):
-    pass
+
+    def __init__(self):
+        super().__init__()
+        self.op_code = OpCode.OP_KILL_CURSORS
+        self.supported_version = 5.0
+
+    def do_parse(self, data):
+        offset = 16
+        offset, zero = byte2int32(data, offset)
+        offset, number_of_cursor_ids = byte2int32(data, offset)
+        cursor_ids = []
+        for i in range(number_of_cursor_ids):
+            offset, cursor_id = byte2int64(data, offset)
+            cursor_ids.append(cursor_id)
+        return {
+            "cursorIDs": cursor_ids,
+            "numberOfCursorIDs": number_of_cursor_ids
+        }
+
+    def do_handle(self, payload: dict, backend) -> dict:
+        raise NotImplementedError("Don't support KillCursors operation yet for TinyMongo backend.")
 
 class QueryHandler(MongoDBHandler):
     def __init__(self):
@@ -143,20 +264,17 @@ class QueryHandler(MongoDBHandler):
 
     def do_parse(self, data):
         offset = 16
-        flag = struct.unpack("<i", data[offset:offset + 4])[0]
-        offset += 4
-        full_collection_name, offset = byte2string(data, offset)
-        number_to_skip = struct.unpack("<i", data[offset:offset + 4])[0]
-        offset += 4
-        number_to_return = struct.unpack("<i", data[offset:offset + 4])[0]
-        offset += 4
-        query, offset = byte2document(data, offset)
+        offset, flags = byte2int32(data, offset)
+        offset, full_collection_name = byte2string(data, offset)
+        offset, number_to_skip = byte2int32(data, offset)
+        offset, number_to_return = byte2int32(data, offset)
+        offset, query = byte2document(data, offset)
         if offset < len(data):
-            return_fields_selector, offset = byte2document(data, offset)
+            offset, return_fields_selector = byte2document(data, offset)
         else:
             return_fields_selector = None
         return {
-            "flags": flag,
+            "flags": flags,
             "fullCollectionName": full_collection_name,
             "numberToSkip": number_to_skip,
             "numberToReturn": number_to_return,
@@ -197,3 +315,9 @@ class QueryHandler(MongoDBHandler):
             "startingFrom": starting_from,
             "documents": query_result
         }
+
+class CompressedHandler(MongoDBHandler):
+    pass
+
+class MSGHandler(MongoDBHandler):
+    pass

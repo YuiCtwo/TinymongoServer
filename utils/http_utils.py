@@ -2,8 +2,6 @@ import struct
 import bson
 import zlib
 
-from protocol.mongodb.op_code import OpCode
-
 
 def crc32_checksum(raw_data, checksum):
     """
