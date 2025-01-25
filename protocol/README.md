@@ -12,6 +12,8 @@ MongoDB 使用的是基于 TCP/IP 的套接字连接与服务器通信，通信�
     - 消息头和有效负载都是 BSON 格式的二进制数据
     - 消息的排序遵循小端序（little-endian）
 
+基于 MongoDB 官方文档较差的可读性，这里参考现有实现，整理出 MongoDB 通信协议的实现细节。
+
 ## BSON
 
 BSON（Binary JSON）是一种二进制形式的 JSON 文档。它是 MongoDB 数据库的默认数据存储格式。
@@ -68,3 +70,69 @@ struct MsgHeader {
 
 ## 参考
 - [MongoDB Wire Protocol](https://www.mongodb.com/zh-cn/docs/manual/reference/mongodb-wire-protocol/)
+
+# Connect to Client
+
+选择 MongoDB Compass 作为客户端（版本 > 5.1），连接到我们实现的 Fake MongoDB Server。
+连接刚开始的时候会不断地尝试发送 OP_QUERY 请求
+请求内容为：
+```txt
+{
+    "flags": 0,
+    "fullCollectionName": "admin.$cmd",
+    "numberToSkip": 0,
+    "numberToReturn": -1,
+    "query": {
+        "ismaster": 1,
+        "helloOk": True,
+        "client": {
+            "application": {
+                "name": "MongoDB Compass"
+            },
+            "driver": {
+                "name": "nodejs",
+                "version": "6.12.0"
+            },
+            "platform": "Node.js v20.18.1, LE",
+            "os": {
+                "name": "win32",
+                "architecture": "x64",
+                "version": "10.0.22631",
+                "type": "Windows_NT"
+            }
+        },
+        "compression": ["none"]
+    },
+    "returnFieldsSelector": None
+}
+```
+> MongoDB 5.1 已删除对 OP_QUERY 查找操作和 OP_QUERY 命令的支持。但有一例外：运行 hello 和 isMaster 命令以作为连接握手的一部分仍然支持 OP_QUERY。
+
+详细的 hello 命令可以参考官方文档 https://www.mongodb.com/zh-cn/docs/manual/reference/command/hello/#mongodb-dbcommand-dbcmd.hello
+
+经过测试 返回的响应类似下面的内容：
+```txt
+{
+	'flags': 8,
+	'cursorID': 0,
+	'startingFrom': 0,
+	'numberReturned': 1,
+	'documents': [{
+		'helloOk': True,
+		'ismaster': True,
+		'topologyVersion': {
+			'processId': ObjectId('67949a0bb94f9cc9296f4d54'),
+			'counter': 0
+		},
+		'maxBsonObjectSize': 16777216,
+		'maxMessageSizeBytes': 48000000,
+		'maxWriteBatchSize': 100000,
+		'localTime': datetime.datetime(2025, 1, 25, 9, 4, 12, 424000),
+		'logicalSessionTimeoutMinutes': 30,
+		'connectionId': 8,
+		'minWireVersion': 0,
+		'maxWireVersion': 25,
+		'readOnly': False,
+		'ok': 1.0
+	}]
+```

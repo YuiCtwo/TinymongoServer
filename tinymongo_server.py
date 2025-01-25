@@ -20,7 +20,8 @@ class TinyMongoServer:
         self.head_handler = HeadHandler()
         # demo list that stores allowed commands
         self.allowed_commands = {
-            OpCode.OP_INSERT: InsertHandler(),
+            OpCode.OP_INSERT.value: InsertHandler(),
+            OpCode.OP_QUERY.value: QueryHandler(),
         }
 
         self._build_socket()
@@ -34,6 +35,7 @@ class TinyMongoServer:
         self.server_socket.listen(5)
         # log server start
         self.logger.info(f"Server started on {self.host}:{self.port}")
+        print(f"Server started on {self.host}:{self.port}")
 
     def start_server(self):
         while True:
@@ -43,14 +45,15 @@ class TinyMongoServer:
     def _handle_request(self, client_socket):
         try:
             data = client_socket.recv(1024)
-            header = self.head_handler.do_parse(data)
+            header = self.head_handler.do_decode(data)
             op_code = header["op_code"]
             # TODO: do we need to generate request_id by ourselves?
             request_id = header["request_id"]
             response_to = header["response_to"]
             if op_code in self.allowed_commands:
                 handler = self.allowed_commands[op_code]
-                payload = handler.do_parse(data)
+                payload = handler.do_decode(data)
+                print(payload)
                 response = handler.do_handle(payload, self.backend)
             else:
                 response = {}
@@ -73,3 +76,7 @@ class TinyMongoServer51(TinyMongoServer):
         super().__init__(host, port)
         self.version = 5.1
         self.response_parse = payload2compressed_response
+
+if __name__ == '__main__':
+    server = TinyMongoServer(port=27018)
+    server.start_server()

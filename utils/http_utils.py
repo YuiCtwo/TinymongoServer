@@ -26,7 +26,7 @@ def payload2response(response_to, request_id, response_json):
     flags = response_json["responseFlags"]
     cursor_id = response_json["cursorID"]
     starting_from = response_json["startingFrom"]
-    response_payload = b"".join(bson.dumps(doc) for doc in response_json["documents"])
+    response_payload = b"".join(bson.encode(doc) for doc in response_json["documents"])
 
     # header: 16, response_header: 20, documents: len(response_payload)
     message_length = len(response_payload) + 16 + 20

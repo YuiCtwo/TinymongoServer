@@ -63,6 +63,15 @@ def test_insert_many(collection_setup):
 
 def test_query(collection_setup):
     collection = collection_setup[0]
+    test_data = [
+        {"username": "user1", "password": "password4"},
+    ]
+    insert_many_result = collection.insert_many(test_data)
+    query_result = collection.find({"username": "user1"})
+    query_result_length = query_result.count()
+    query_result_list = [query_result[i] for i in range(query_result_length)]
+    print(query_result_list)
+    assert True
 
 
 if __name__ == '__main__':

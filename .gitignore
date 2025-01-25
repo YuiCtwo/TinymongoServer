@@ -176,3 +176,4 @@ cython_debug/
 tinydb/
 test_db/
 src/
+.log

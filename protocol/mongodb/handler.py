@@ -4,7 +4,7 @@ import bson
 from utils.logger import server_logger
 from protocol.op_code import OpCode
 
-def arry2flag(arr):
+def array2flag(arr):
     """
     Convert byte like `00011000` stored in array to integer. Used for responseFlags
     :param arr: length<=32, every element is 0 or 1 represents a bit.
@@ -57,13 +57,13 @@ def byte2document(data, offset):
     :return: offset and decoded document result
     """
     doc_length = struct.unpack("<i", data[offset: offset+4])[0]
-    document = bson.loads(data[offset: offset+doc_length])
+    document = bson.decode(data[offset: offset+doc_length])
     offset += doc_length
     return offset, document
 
 class HeadHandler:
 
-    def do_parse(self, data):
+    def do_decode(self, data):
         # MongoDB message header
         # 16 bytes in total, 4 bytes each: (message length), (request id), (response to), (op code)
         header = struct.unpack("<iiii", data[:16])
@@ -81,13 +81,13 @@ class MongoDBHandler:
         self.op_code = OpCode.OP_DUMMY
         self.supported_version = 0.0
 
-    def do_parse(self, data):
+    def do_decode(self, data):
         """
         :param data: raw data received from client
         :return: json object contains the request payload
         """
         # DO NOT USE THIS METHOD, IT IS JUST A PLACEHOLDER
-        return bson.loads(data)
+        return bson.decode(data)
 
     def do_handle(self, payload: dict, backend) -> dict:
         """
@@ -98,6 +98,9 @@ class MongoDBHandler:
         # if no response required, return empty dict
         return {}
 
+    def do_encode(self, payload_dict):
+        pass
+
 class InsertHandler(MongoDBHandler):
 
     def __init__(self):
@@ -105,7 +108,7 @@ class InsertHandler(MongoDBHandler):
         self.op_code = OpCode.OP_INSERT
         self.supported_version = 5.0
 
-    def do_parse(self, data):
+    def do_decode(self, data):
         offset = 16
         offset, flag = byte2int32(data, offset)
         offset, full_collection_name = byte2string(data, offset)
@@ -142,7 +145,7 @@ class UpdateHandler(MongoDBHandler):
         self.op_code = OpCode.OP_UPDATE
         self.supported_version = 5.0
 
-    def do_parse(self, data):
+    def do_decode(self, data):
         offset = 16
         offset, zero = byte2int32(data, offset)
         offset, full_collection_name = byte2string(data, offset)
@@ -183,7 +186,7 @@ class DeleteHandler(MongoDBHandler):
         self.op_code = OpCode.OP_DELETE
         self.supported_version = 5.0
 
-    def do_parse(self, data):
+    def do_decode(self, data):
         offset = 16
         # `zero` is reserved for future use
         offset, zero = byte2int32(data, offset)
@@ -218,7 +221,7 @@ class GetMoreHandler(MongoDBHandler):
         self.op_code = OpCode.OP_GET_MORE
         self.supported_version = 5.0
 
-    def do_parse(self, data):
+    def do_decode(self, data):
         offset = 16
         offset, zero = byte2int32(data, offset)
         offset, full_collection_name = byte2string(data, offset)
@@ -240,7 +243,7 @@ class KillCursorsHandler(MongoDBHandler):
         self.op_code = OpCode.OP_KILL_CURSORS
         self.supported_version = 5.0
 
-    def do_parse(self, data):
+    def do_decode(self, data):
         offset = 16
         offset, zero = byte2int32(data, offset)
         offset, number_of_cursor_ids = byte2int32(data, offset)
@@ -256,13 +259,14 @@ class KillCursorsHandler(MongoDBHandler):
     def do_handle(self, payload: dict, backend) -> dict:
         raise NotImplementedError("Don't support KillCursors operation yet for TinyMongo backend.")
 
+
 class QueryHandler(MongoDBHandler):
     def __init__(self):
         super().__init__()
         self.op_code = OpCode.OP_QUERY
         self.supported_version = 5.0
 
-    def do_parse(self, data):
+    def do_decode(self, data):
         offset = 16
         offset, flags = byte2int32(data, offset)
         offset, full_collection_name = byte2string(data, offset)
@@ -288,7 +292,7 @@ class QueryHandler(MongoDBHandler):
         ### ????
         cursor_id = 0
         starting_from = 0
-        query_result = []
+        query_result_list = []
 
         full_collection_name = payload["fullCollectionName"]
         db_name, table_name = full_collection_name.split(".")
@@ -306,18 +310,49 @@ class QueryHandler(MongoDBHandler):
         # ignored return fields selector
         try:
             query_result = table.find(filter=actual_query, sort=order_by, limit=limit, skip=skip)
+            query_result_list = [query_result[i] for i in range(query_result.count())]
         except Exception as e:
             # query failed
-            response_flags = arry2flag([0, 1, 0, 0])
+            response_flags = array2flag([0, 1, 0, 0])
         return {
             "responseFlags": response_flags,
             "cursorID": cursor_id,
             "startingFrom": starting_from,
-            "documents": query_result
+            "documents": query_result_list
         }
+
+    def do_encode(self, payload_dict):
+        query_bson = bson.encode(payload_dict["query"])
+        flags_byte = struct.pack("<i", payload_dict["flags"])
+        collection_name = payload_dict["fullCollectionName"]
+        collection_name_byte = collection_name.encode("utf-8") + b"\x00"
+        number_to_skip_byte = struct.pack("<i", payload_dict["numberToSkip"])
+        number_to_return_byte = struct.pack("<i", payload_dict["numberToReturn"])
+
+        # 构造完整消息
+        message = flags_byte + collection_name_byte + number_to_skip_byte + number_to_return_byte + query_bson
+        return message
 
 class CompressedHandler(MongoDBHandler):
     pass
 
 class MSGHandler(MongoDBHandler):
     pass
+
+class ReplyHandler(MongoDBHandler):
+
+    def do_decode(self, data):
+        offset = 16
+        flags, cursor_id, starting_from, number_returned = struct.unpack('<iqii', data[offset:offset+20])
+        documents = []
+        offset += 20
+        for i in range(number_returned):
+            offset, document = byte2document(data, offset)
+            documents.append(document)
+        return {
+            'flags': flags,
+            'cursorID': cursor_id,
+            'startingFrom': starting_from,
+            'numberReturned': number_returned,
+            'documents': documents
+        }
