@@ -2,7 +2,7 @@
 
 An extension version of [Tinymongo](https://github.com/schapman1974/tinymongo) which supports connection from local or remote server.
 
-**Note: This repo is under fast development.**
+**Note: This repo is under fast development and is incomplete now.**
 
 # Environment Setup
 
