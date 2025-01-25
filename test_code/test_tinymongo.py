@@ -6,7 +6,7 @@ from tinymongo import TinyMongoClient
 @pytest.fixture
 def collection_setup(request):
     # remove test_db if it exists
-    db_name = os.path.abspath('./test_db')
+    db_name = os.path.abspath('../test_db')
     try:
         for f in os.listdir(os.path.join('.', db_name)):
             print('removing file ', f)

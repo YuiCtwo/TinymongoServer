@@ -1,5 +1,7 @@
 import socket
 
+from nbclassic.jstest import argparser
+
 from tinymongo import TinyMongoClient
 
 from protocol.mongodb.handler import *
@@ -77,6 +79,10 @@ class TinyMongoServer51(TinyMongoServer):
         self.version = 5.1
         self.response_parse = payload2compressed_response
 
+
 if __name__ == '__main__':
-    server = TinyMongoServer(port=27018)
+    argparser.add_argument("--port", type=int, default=27018, help="Server port")
+    argparser.add_argument("--host", type=str, default='127.0.0.1', help="Server host")
+    args = argparser.parse_args()
+    server = TinyMongoServer(host=args.host, port=args.port)
     server.start_server()
