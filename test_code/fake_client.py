@@ -2,7 +2,13 @@ import socket
 import struct
 
 from backend.op_code import OpCode
-from backend.parser import HeadParser, QueryParser, ReplyParser
+from backend.parser import HeadParser, QueryParser, ReplyParser, MSGParser
+
+
+def read_binary_request(file_path):
+    with open(file_path, 'rb') as f:
+        data = f.read()
+    return data
 
 class MongoDBClient:
     def __init__(self, host='127.0.0.1', port=27017):
@@ -13,6 +19,7 @@ class MongoDBClient:
         self.query_handler = QueryParser()
         self.head_handler = HeadParser()
         self.reply_handler = ReplyParser()
+        self.msg_handler = MSGParser()
         self.connect()
 
     def connect(self):
@@ -62,12 +69,26 @@ class MongoDBClient:
         result["op_code"] = header["op_code"]
         print(result)
 
-
+    def request_hello_next(self):
+        binary_file = "json_request/hello_next.bin"
+        msg = read_binary_request(binary_file)
+        self.send_message(OpCode.OP_MSG, msg)
+        print("Sent `MSG` request to MongoDB server")
+        response_raw = self.client_socket.recv(1024)
+        header = self.head_handler.do_decode(response_raw)
+        result = self.msg_handler.do_decode(response_raw)
+        result["response_length"] = header["message_length"]
+        result["request_id"] = header["request_id"]
+        result["response_to"] = header["response_to"]
+        result["op_code"] = header["op_code"]
+        print(result)
 
 
 if __name__ == "__main__":
     client = MongoDBClient(host='127.0.0.1', port=27017)
     client.request_hello()
+    client.request_hello_next()
+    client.close()
     # while True:
     #     data = client.client_socket.recv(1024)
     #     header = client.head_handler.do_decode(data)

@@ -18,8 +18,8 @@ class TinyMongoDBBackend:
             OpCode.OP_INSERT: self.handle_insert,
             OpCode.OP_UPDATE: self.handle_update,
             OpCode.OP_DELETE: self.handle_delete,
-            OpCode.OP_GET_MORE: self.handle_get_more,
-            OpCode.OP_KILL_CURSORS: self.handle_kill_cursors,
+            # OpCode.OP_GET_MORE: self.handle_get_more,
+            # OpCode.OP_KILL_CURSORS: self.handle_kill_cursors,
             OpCode.OP_QUERY: self.handle_query,
             OpCode.OP_COMPRESSED: self.handle_compressed,
             OpCode.OP_MSG: self.handle_msg,
@@ -40,7 +40,6 @@ class TinyMongoDBBackend:
         # used for testing only
         # decode the data and return the result
         return self.op_parser_mapping[op_code].do_decode(data)
-
 
     def handle_insert(self, data):
         payload = self.op_parser_mapping[OpCode.OP_INSERT].do_decode(data)
@@ -141,7 +140,50 @@ class TinyMongoDBBackend:
         pass
 
     def handle_msg(self, data):
-        pass
+        payload = self.op_parser_mapping[OpCode.OP_MSG].do_decode(data)
+        print(payload)
+        return_flags = 0
+        if "flagBits" in payload:
+            is_checksumPresent = payload["flagBits"] & 1
+            is_moreToCome = (payload["flagBits"] >> 1) & 1
+            is_exhaustAllowed = (payload["flagBits"] >> 16) & 1
+            if is_checksumPresent:
+                return_flags += 1
+            if is_exhaustAllowed:
+                return_flags += (1 << 1)
+            if is_moreToCome:
+                # more to come, return None
+                return {}
+            else:
+                # no more to come, handle the payload
+                if "hello" in payload and payload["hello"] == 1:
+                    # handle hello
+                    return self.handle_msg_hello(payload)
+                else:
+                    pass
+
+        else:
+            self.logger.warning("Skipping payload without flagBits.")
+        return {}
+
+    def handle_msg_hello(self, payload):
+        return {
+            'isWritablePrimary': True,
+            'topologyVersion': {
+                'processId': ObjectId(),
+                'counter': 0
+            },
+            'maxBsonObjectSize': 16777216,
+            'maxMessageSizeBytes': 48000000,
+            'maxWriteBatchSize': 100000,
+            'logicalSessionTimeoutMinutes': 30,
+            'localTime': datetime.now(),
+            'connectionId': self.connection_id,
+            'minWireVersion': 0,
+            'maxWireVersion': 25,
+            'readOnly': False,
+            'ok': 1.0
+        }
 
     def handle_hello(self, payload):
         # hello-master do not support for TinyMongo backend

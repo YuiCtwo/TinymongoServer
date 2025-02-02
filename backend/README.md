@@ -45,21 +45,23 @@ struct MsgHeader {
 ### OP_MSG
 5.1 版本的消息请求，用于支持多文档事务。
 
-### OP_INSERT
+```text
+OP_MSG {
+    MsgHeader header;           // standard message header
+    uint32 flagBits;            // message flags
+    Sections[] sections;        // data sections
+    optional<uint32> checksum;  // optional CRC-32C checksum
+}
+```
+比较关键的部分在于：flagBits 标志位和 sections 消息数组：
+- flagBits: 前 16 位必须有，我个人的理解是只能设置有实际含义的二进制位，否则，解析器则必须报错。
+原文是 `"The first 16 bits (0-15) are required and parsers MUST error if an unknown bit is set."`
+最后 16 位是可选的，允许设置一些额外的标志位，但代理和其他消息转发器必须在转发消息之前清除任何未知的可选位。
 
-### OP_UPDATE
+必须要吐槽的是，因为数据类型是 uint32，所以必然有 32 位啊！
+并且实际情况下 Compass 客户端发出的请求中 flagBits 前 15 位没有含义的位都被设置为了 1。
 
-### OP_DELETE
-
-### OP_GET_MORE
-
-### OP_KILL_CURSORS
-
-### OP_QUERY
-
-### OP_REPLY
-
-### OP_UPDATE
+旧版本的操作码不再列出，详细的可以查看官方文档。
 
 ## BSON Document & Collection
 
@@ -147,3 +149,51 @@ struct MsgHeader {
 可以直接调用 bson 库来生成。
 
 对于最新版的 Compass 来说，hello 一旦建立连接成功，会立刻发送一个 OP_MSG 请求，内容为
+
+```text
+    'flagBits': 65536,
+    'sections': [{
+        'hello': 1,
+        'maxAwaitTimeMS': 10000,
+        'topologyVersion': {
+            'processId': ObjectId('679f5fe50ab84b41447995a7'),
+            'counter': 0
+        },
+        '$db': 'admin'
+    }]
+```
+依旧看不明白，果断发给官方的 Server 拿返回结果，值得一提的是 'topologyVersion' 的 'counter' 类型是 Long，不好使用 Python 指定他的类型，
+所以直接存一个二进制文件用于测试比较合适。 
+
+```text
+{
+	'flagBits': 2,
+	'sections': [{
+		'isWritablePrimary': True,
+		'topologyVersion': {
+			'processId': ObjectId('679f372744513c4d2d152cb0'),
+			'counter': 0
+		},
+		'maxBsonObjectSize': 16777216,
+		'maxMessageSizeBytes': 48000000,
+		'maxWriteBatchSize': 100000,
+		'localTime': datetime.datetime(2025, 2, 2, 12, 52, 51, 653000),
+		'logicalSessionTimeoutMinutes': 30,
+		'connectionId': 17,
+		'minWireVersion': 0,
+		'maxWireVersion': 25,
+		'readOnly': False,
+		'ok': 1.0
+	}],
+	'response_length': 313,
+	'request_id': 919,
+	'response_to': 1,
+	'op_code': 2013
+}
+```
+
+看样子是 MSG 版本的 hello 命令，注意 flagBits 变为 2
+> 仅当响应已设置 exhaustAllowed 位的请求时，回复才会设置此位。
+
+因为我们在请求的时候设置了 exhaustAllowed 位，所以返回的响应中才会在第一个位上有 1。
+顺便一提如果请求出现错误，那么返回的 flagBits 应该全部设置为 0。
