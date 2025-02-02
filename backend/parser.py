@@ -1,8 +1,8 @@
 import struct
 import bson
 
-from utils.logger import server_logger
-from protocol.op_code import OpCode
+
+from backend.op_code import OpCode
 
 def array2flag(arr):
     """
@@ -61,7 +61,7 @@ def byte2document(data, offset):
     offset += doc_length
     return offset, document
 
-class HeadHandler:
+class HeadParser:
 
     def do_decode(self, data):
         # MongoDB message header
@@ -75,9 +75,9 @@ class HeadHandler:
         }
 
 
-class MongoDBHandler:
+class MongoDBParser:
     def __init__(self):
-        self.logger = server_logger
+
         self.op_code = OpCode.OP_DUMMY
         self.supported_version = 0.0
 
@@ -89,19 +89,10 @@ class MongoDBHandler:
         # DO NOT USE THIS METHOD, IT IS JUST A PLACEHOLDER
         return bson.decode(data)
 
-    def do_handle(self, payload: dict, backend) -> dict:
-        """
-        :param payload: json object contains the request payload
-        :param backend: a collection object in TinyMongo
-        :return: response payload in json object
-        """
-        # if no response required, return empty dict
-        return {}
-
     def do_encode(self, payload_dict):
         pass
 
-class InsertHandler(MongoDBHandler):
+class InsertParser(MongoDBParser):
 
     def __init__(self):
         super().__init__()
@@ -124,21 +115,7 @@ class InsertHandler(MongoDBHandler):
         }
 
 
-    def do_handle(self, payload: dict, backend) -> dict:
-        self.logger.info(f"Insert Operation: {payload}")
-        flags = payload["flags"]
-        
-        full_collection_name = payload["fullCollectionName"]
-        # collection_name like "db.collection"
-        db_name, table_name = full_collection_name.split(".")
-        collection = getattr(backend, db_name)
-        table = getattr(collection, table_name)
-        documents = payload["documents"]
-        record_id = table.insert_multiple(documents)
-        return {}
-
-
-class UpdateHandler(MongoDBHandler):
+class UpdateParser(MongoDBParser):
 
     def __init__(self):
         super().__init__()
@@ -159,27 +136,8 @@ class UpdateHandler(MongoDBHandler):
             "update": update,
         }
 
-    def do_handle(self, payload: dict, backend) -> dict:
-        flags = payload["flags"]
-        full_collection_name = payload["fullCollectionName"]
-        db_name, table_name = full_collection_name.split(".")
-        collection = getattr(backend, db_name)
-        table = getattr(collection, table_name)
-        selector = payload["selector"]
-        update = payload["update"]
-        if flags == 1:
-            # update or insert
-            if len(backend.find(selector)) == 0:
-                # insert
-                table.insert_one(update)
-        elif flags == (1 << 1):
-            # It seems that TinyMongo may not support multi-update
-            table.update(selector, update, multi=True)
-        else:
-            table.update(selector, update)
-        return {}
 
-class DeleteHandler(MongoDBHandler):
+class DeleteParser(MongoDBParser):
 
     def __init__(self):
         super().__init__()
@@ -202,19 +160,8 @@ class DeleteHandler(MongoDBHandler):
             "documents": documents
         }
 
-    def do_handle(self, payload: dict, backend) -> dict:
-        flag = payload["flags"]
-        full_collection_name = payload["fullCollectionName"]
-        db_name, table_name = full_collection_name.split(".")
-        collection = getattr(backend, db_name)
-        table = getattr(collection, table_name)
-        documents = payload["documents"]
-        for document in documents:
-            table.remove(document, multi=bool(flag))
-        return {}
 
-
-class GetMoreHandler(MongoDBHandler):
+class GetMoreParser(MongoDBParser):
 
     def __init__(self):
         super().__init__()
@@ -233,10 +180,7 @@ class GetMoreHandler(MongoDBHandler):
             "cursorID": cursor_id
         }
 
-    def do_handle(self, payload: dict, backend) -> dict:
-        raise NotImplementedError("Don't support GetMore operation yet for TinyMongo backend.")
-
-class KillCursorsHandler(MongoDBHandler):
+class KillCursorsParser(MongoDBParser):
 
     def __init__(self):
         super().__init__()
@@ -256,11 +200,8 @@ class KillCursorsHandler(MongoDBHandler):
             "numberOfCursorIDs": number_of_cursor_ids
         }
 
-    def do_handle(self, payload: dict, backend) -> dict:
-        raise NotImplementedError("Don't support KillCursors operation yet for TinyMongo backend.")
 
-
-class QueryHandler(MongoDBHandler):
+class QueryParser(MongoDBParser):
     def __init__(self):
         super().__init__()
         self.op_code = OpCode.OP_QUERY
@@ -286,41 +227,6 @@ class QueryHandler(MongoDBHandler):
             "returnFieldsSelector": return_fields_selector
         }
 
-    def do_handle(self, payload: dict, backend) -> dict:
-        # query success
-        response_flags = 0
-        ### ????
-        cursor_id = 0
-        starting_from = 0
-        query_result_list = []
-
-        full_collection_name = payload["fullCollectionName"]
-        db_name, table_name = full_collection_name.split(".")
-        collection = getattr(backend, db_name)
-        table = getattr(collection, table_name)
-        query = payload["query"]
-        actual_query = query.get("$query", query)
-        order_by = query.get("$orderby", None)
-
-        skip = payload["numberToSkip"]
-        limit = payload["numberToReturn"]
-        ### ????
-        explain = query.get("$explain", None)
-        hint = query.get("$hint", None)
-        # ignored return fields selector
-        try:
-            query_result = table.find(filter=actual_query, sort=order_by, limit=limit, skip=skip)
-            query_result_list = [query_result[i] for i in range(query_result.count())]
-        except Exception as e:
-            # query failed
-            response_flags = array2flag([0, 1, 0, 0])
-        return {
-            "responseFlags": response_flags,
-            "cursorID": cursor_id,
-            "startingFrom": starting_from,
-            "documents": query_result_list
-        }
-
     def do_encode(self, payload_dict):
         query_bson = bson.encode(payload_dict["query"])
         flags_byte = struct.pack("<i", payload_dict["flags"])
@@ -333,13 +239,13 @@ class QueryHandler(MongoDBHandler):
         message = flags_byte + collection_name_byte + number_to_skip_byte + number_to_return_byte + query_bson
         return message
 
-class CompressedHandler(MongoDBHandler):
+class CompressedParser(MongoDBParser):
     pass
 
-class MSGHandler(MongoDBHandler):
+class MSGParser(MongoDBParser):
     pass
 
-class ReplyHandler(MongoDBHandler):
+class ReplyParser(MongoDBParser):
 
     def do_decode(self, data):
         offset = 16

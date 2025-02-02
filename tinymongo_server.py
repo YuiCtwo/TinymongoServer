@@ -1,10 +1,10 @@
 import socket
 
-from nbclassic.jstest import argparser
+from argparse import ArgumentParser
 
-from tinymongo import TinyMongoClient
 
-from protocol.mongodb.handler import *
+from backend.parser import HeadParser
+from backend.tinymongodb.handler import TinyMongoDBBackend
 from utils.http_utils import payload2response, payload2compressed_response
 from utils.logger import server_logger
 
@@ -13,22 +13,16 @@ class TinyMongoServer:
     def __init__(self, host='127.0.0.1', port=27017):
         self.host = host
         self.port = port
-        # get an instance of database in tinymongo
-        # see example in https://github.com/schapman1974/tinymongo
-        connection = TinyMongoClient()
-        self.backend = connection
+
         #
+        self.handler = TinyMongoDBBackend()
         self.logger = server_logger
-        self.head_handler = HeadHandler()
+        self.head_handler = HeadParser()
         # demo list that stores allowed commands
-        self.allowed_commands = {
-            OpCode.OP_INSERT.value: InsertHandler(),
-            OpCode.OP_QUERY.value: QueryHandler(),
-        }
+        self.allowed_commands = self.handler.allowed_commands
 
         self._build_socket()
         self.response_parse = payload2response
-        self.version = 5.0
 
     def _build_socket(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -53,10 +47,10 @@ class TinyMongoServer:
             request_id = header["request_id"]
             response_to = header["response_to"]
             if op_code in self.allowed_commands:
-                handler = self.allowed_commands[op_code]
-                payload = handler.do_decode(data)
+                payload = self.handler.handle_decode(op_code, data)
                 print(payload)
-                response = handler.do_handle(payload, self.backend)
+                handler = self.allowed_commands[op_code]
+                response = handler.do_handle(data)
             else:
                 response = {}
             # some of the command may not need to return any response
@@ -81,8 +75,9 @@ class TinyMongoServer51(TinyMongoServer):
 
 
 if __name__ == '__main__':
-    argparser.add_argument("--port", type=int, default=27018, help="Server port")
-    argparser.add_argument("--host", type=str, default='127.0.0.1', help="Server host")
-    args = argparser.parse_args()
+    arg_parser = ArgumentParser(description="TinyMongo Server")
+    arg_parser.add_argument("--port", type=int, default=27018, help="Server port")
+    arg_parser.add_argument("--host", type=str, default='127.0.0.1', help="Server host")
+    args = arg_parser.parse_args()
     server = TinyMongoServer(host=args.host, port=args.port)
     server.start_server()

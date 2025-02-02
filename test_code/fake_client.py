@@ -1,10 +1,8 @@
 import socket
 import struct
 
-import bson
-
-from protocol.op_code import OpCode
-from protocol.mongodb.handler import HeadHandler, QueryHandler, ReplyHandler
+from backend.op_code import OpCode
+from backend.handler import HeadHandler, QueryHandler, ReplyHandler
 
 class MongoDBClient:
     def __init__(self, host='127.0.0.1', port=27017):

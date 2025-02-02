@@ -1,8 +1,6 @@
 # basic code for MongoDB OpCode in protocol
 
-from enum import Enum
-
-class OpCode(Enum):
+class OpCode:
     OP_DUMMY = 0
     OP_COMPRESSED = 2012
     OP_MSG = 2013
