@@ -130,7 +130,7 @@ class UpdateParser(MongoDBParser):
         offset, selector = byte2document(data, offset)
         offset, update = byte2document(data, offset)
         return {
-            "flags": flags,
+            "responseFlags": flags,
             "fullCollectionName": full_collection_name,
             "selector": selector,
             "update": update,

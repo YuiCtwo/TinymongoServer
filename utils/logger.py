@@ -12,3 +12,4 @@ _server_logger_handler.setFormatter(server_logger_formatter)
 server_logger.addHandler(
     _server_logger_handler
 )
+server_logger.setLevel(logging.INFO)

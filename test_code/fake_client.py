@@ -2,7 +2,7 @@ import socket
 import struct
 
 from backend.op_code import OpCode
-from backend.handler import HeadHandler, QueryHandler, ReplyHandler
+from backend.parser import HeadParser, QueryParser, ReplyParser
 
 class MongoDBClient:
     def __init__(self, host='127.0.0.1', port=27017):
@@ -10,9 +10,9 @@ class MongoDBClient:
         self.host = host
         self.port = port
         self.request_id = 0
-        self.query_handler = QueryHandler()
-        self.head_handler = HeadHandler()
-        self.reply_handler = ReplyHandler()
+        self.query_handler = QueryParser()
+        self.head_handler = HeadParser()
+        self.reply_handler = ReplyParser()
         self.connect()
 
     def connect(self):
@@ -51,7 +51,7 @@ class MongoDBClient:
     def request_hello(self):
         from json_request.hello import payload
         msg = self.query_handler.do_encode(payload)
-        self.send_message(OpCode.OP_QUERY.value, msg)
+        self.send_message(OpCode.OP_QUERY, msg)
         print("Sent `hello` request to MongoDB server")
         response_raw = self.client_socket.recv(1024)
         header = self.head_handler.do_decode(response_raw)
@@ -66,7 +66,9 @@ class MongoDBClient:
 
 
 if __name__ == "__main__":
-    header_handler = HeadHandler()
     client = MongoDBClient(host='127.0.0.1', port=27017)
     client.request_hello()
-    client.close()
+    # while True:
+    #     data = client.client_socket.recv(1024)
+    #     header = client.head_handler.do_decode(data)
+    #     print(header)

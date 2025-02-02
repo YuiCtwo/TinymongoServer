@@ -73,6 +73,5 @@ def test_query(collection_setup):
     print(query_result_list)
     assert True
 
-
 if __name__ == '__main__':
     pytest.main()

@@ -1,4 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
+
+from bson import ObjectId
 
 from backend.parser import *
 from tinymongo import TinyMongoClient
@@ -32,6 +34,7 @@ class TinyMongoDBBackend:
             OpCode.OP_COMPRESSED: CompressedParser(),
             OpCode.OP_MSG: MSGParser(),
         }
+        self.connection_id = 1
 
     def handle_decode(self, op_code, data):
         # used for testing only
@@ -42,7 +45,7 @@ class TinyMongoDBBackend:
     def handle_insert(self, data):
         payload = self.op_parser_mapping[OpCode.OP_INSERT].do_decode(data)
         self.logger.info(f"Insert Operation: {payload}")
-        flags = payload["flags"]
+        flags = payload["responseFlags"]
 
         full_collection_name = payload["fullCollectionName"]
         # collection_name like "db.collection"
@@ -55,7 +58,7 @@ class TinyMongoDBBackend:
 
     def handle_update(self, data):
         payload = self.op_parser_mapping[OpCode.OP_UPDATE].do_decode(data)
-        flags = payload["flags"]
+        flags = payload["responseFlags"]
         full_collection_name = payload["fullCollectionName"]
         db_name, table_name = full_collection_name.split(".")
         collection = getattr(self.backend, db_name)
@@ -76,7 +79,7 @@ class TinyMongoDBBackend:
 
     def handle_delete(self, data):
         payload = self.op_parser_mapping[OpCode.OP_DELETE].do_decode(data)
-        flag = payload["flags"]
+        flag = payload["responseFlags"]
         full_collection_name = payload["fullCollectionName"]
         db_name, table_name = full_collection_name.split(".")
         collection = getattr(self.backend, db_name)
@@ -108,7 +111,8 @@ class TinyMongoDBBackend:
         collection = getattr(self.backend, db_name)
         table = getattr(collection, table_name)
         query = payload["query"]
-        if query.get("ismaster", False):
+
+        if "ismaster" in query and query["ismaster"] == 1:
             return self.handle_hello(payload)
 
         actual_query = query.get("$query", query)
@@ -140,21 +144,27 @@ class TinyMongoDBBackend:
         pass
 
     def handle_hello(self, payload):
-        # hello-master do not supported for TinyMongo backend
+        # hello-master do not support for TinyMongo backend
         # so we just return a fake response
         return {
-            "responseFlags": 0,
+            "responseFlags": 8,
             "cursorID": 0,
             "startingFrom": 0,
+            'numberReturned': 1,
             "documents": [{
                 'helloOk': True,
                 'ismaster': True,
+                'topologyVersion': {
+                    'processId': ObjectId(),
+                    'counter': 0
+                },
                 'maxBsonObjectSize': 16777216,
                 'maxMessageSizeBytes': 48000000,
                 'maxWriteBatchSize': 100000,
+
                 'logicalSessionTimeoutMinutes': 30,
                 'localTime': datetime.now(),
-                'connectionId': 8,  # ????
+                'connectionId': self.connection_id,
                 'minWireVersion': 0,
                 'maxWireVersion': 25,
                 'readOnly': False,

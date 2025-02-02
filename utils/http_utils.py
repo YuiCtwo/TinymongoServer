@@ -2,6 +2,8 @@ import struct
 import bson
 import zlib
 
+from backend.op_code import OpCode
+
 
 def crc32_checksum(raw_data, checksum):
     """
@@ -32,9 +34,9 @@ def payload2response(response_to, request_id, response_json):
     message_length = len(response_payload) + 16 + 20
 
     # little endian, 4 int32
-    response_header = struct.pack("<iiii", message_length, request_id, response_to, 1)
+    response_header = struct.pack("<iiii", message_length, request_id, response_to, OpCode.OP_REPLY)
     response_body = struct.pack("<iqii", flags, cursor_id, starting_from, number_documents)
-
+    print(message_length, request_id, response_to)
     return response_header + response_body + response_payload
 
 def payload2compressed_response(response_to, request_id, response_json):

@@ -110,10 +110,12 @@ struct MsgHeader {
 
 详细的 hello 命令可以参考官方文档 https://www.mongodb.com/zh-cn/docs/manual/reference/command/hello/#mongodb-dbcommand-dbcmd.hello
 
+
+
 经过测试 返回的响应类似下面的内容：
 ```txt
 {
-	'flags': 8,
+	'responseFlags': 8,
 	'cursorID': 0,
 	'startingFrom': 0,
 	'numberReturned': 1,
@@ -136,3 +138,12 @@ struct MsgHeader {
 		'ok': 1.0
 	}]
 ```
+很可惜，好像目前的个人实现的 MongoDB 单文件数据库基本都不支持 hello 命令，需要我们自己构造虚拟的返回结果。
+少了个压缩字段，跟据官方文档的说明，看来 Compass 客户端默认不启用压缩算法，神奇。
+> 如果客户端未指定压缩，或者客户端指定了未为连接的 mongod 或 mongos 实例启用的压缩算法，则不会返回该字段。
+
+- localTime 跟据文档说明返回的是服务器的本地 UTC 时间，需要用 datetime 模块获取一下： `datetime.now()`
+- topologyVersion 仅供 MongoDB 内部使用，可以忽略，但保险起见还是返回一下。 `ObjectId` 是 MongoDB 的特殊字段，用于标识数据库里面的 `_id`
+可以直接调用 bson 库来生成。
+
+对于最新版的 Compass 来说，hello 一旦建立连接成功，会立刻发送一个 OP_MSG 请求，内容为
