@@ -1,13 +1,22 @@
 import struct
+import zlib
 from typing import List
 
 import bson
 
 
 from backend.op_code import OpCode
-from utils.http_utils import crc32_checksum
 from utils.logger import server_logger
 
+def crc32_checksum(raw_data, checksum):
+    """
+    Calculate the CRC32 checksum of the given data and compare it with the given checksum.
+    :param raw_data: Total data except the checksum
+    :param checksum: The expected checksum
+    :return:
+    """
+    computed_checksum = zlib.crc32(raw_data) & 0xFFFFFFFF
+    return computed_checksum == checksum
 
 def array2flag(arr):
     """
@@ -335,7 +344,7 @@ class MSGParser(MongoDBParser):
             section_bson = bson.encode(section)
             message_body += section_bson
 
-        flags_byte = struct.pack("<i", payload_dict["flagBits"])
+        flags_byte = struct.pack("<I", payload_dict["flagBits"])
 
         # construct the complete message
         message = flags_byte + message_body

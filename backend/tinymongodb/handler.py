@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime, timezone
 
 from bson import ObjectId
@@ -5,6 +6,10 @@ from bson import ObjectId
 from backend.parser import *
 from tinymongo import TinyMongoClient
 from utils.logger import server_logger
+
+def number2long(num):
+    return struct.unpack("<q", struct.pack("<q", num))[0]
+
 
 class TinyMongoDBBackend:
 
@@ -147,6 +152,7 @@ class TinyMongoDBBackend:
             is_checksumPresent = payload["flagBits"] & 1
             is_moreToCome = (payload["flagBits"] >> 1) & 1
             is_exhaustAllowed = (payload["flagBits"] >> 16) & 1
+            print(is_checksumPresent, is_moreToCome, is_exhaustAllowed)
             if is_checksumPresent:
                 return_flags += 1
             if is_exhaustAllowed:
@@ -155,10 +161,16 @@ class TinyMongoDBBackend:
                 # more to come, return None
                 return {}
             else:
+                sections = payload["sections"]
+                sections0 = sections[0]
                 # no more to come, handle the payload
-                if "hello" in payload and payload["hello"] == 1:
+                if "hello" in sections0 and sections0["hello"] == 1:
                     # handle hello
-                    return self.handle_msg_hello(payload)
+                    return_sections = self.handle_msg_hello(payload)
+                    return {
+                        "flagBits": return_flags,
+                        "sections": [return_sections]
+                    }
                 else:
                     pass
 
@@ -198,7 +210,8 @@ class TinyMongoDBBackend:
                 'ismaster': True,
                 'topologyVersion': {
                     'processId': ObjectId(),
-                    'counter': 0
+                    # TODO: Long type is required, but for 0 in Python, it is int32 by default.
+                    'counter': sys.maxsize
                 },
                 'maxBsonObjectSize': 16777216,
                 'maxMessageSizeBytes': 48000000,

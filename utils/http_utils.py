@@ -1,19 +1,9 @@
 import struct
 import bson
-import zlib
 
+from backend.parser import MSGParser
 from backend.op_code import OpCode
 
-
-def crc32_checksum(raw_data, checksum):
-    """
-    Calculate the CRC32 checksum of the given data and compare it with the given checksum.
-    :param raw_data: Total data except the checksum
-    :param checksum: The expected checksum
-    :return:
-    """
-    computed_checksum = zlib.crc32(raw_data) & 0xFFFFFFFF
-    return computed_checksum == checksum
 
 def payload2response(response_to, request_id, response_json):
     """
@@ -41,3 +31,11 @@ def payload2response(response_to, request_id, response_json):
 def payload2compressed_response(response_to, request_id, response_json):
     # used for version 5.1+
     pass
+
+
+def payload2msg_response(response_to, request_id, response_json):
+    parser = MSGParser()
+    msg = parser.do_encode(response_json)
+    message_length = len(msg) + 16
+    response_header = struct.pack("<iiii", message_length, request_id, response_to, OpCode.OP_MSG)
+    return response_header + msg

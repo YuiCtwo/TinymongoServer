@@ -70,8 +70,10 @@ class MongoDBClient:
         print(result)
 
     def request_hello_next(self):
-        binary_file = "json_request/hello_next.bin"
-        msg = read_binary_request(binary_file)
+        # binary_file = "json_request/hello_next.bin"
+        # msg = read_binary_request(binary_file)
+        from json_request.hello_next import payload
+        msg = self.msg_handler.do_encode(payload)
         self.send_message(OpCode.OP_MSG, msg)
         print("Sent `MSG` request to MongoDB server")
         response_raw = self.client_socket.recv(1024)
@@ -88,8 +90,10 @@ if __name__ == "__main__":
     client = MongoDBClient(host='127.0.0.1', port=27017)
     client.request_hello()
     client.request_hello_next()
-    client.close()
-    # while True:
-    #     data = client.client_socket.recv(1024)
-    #     header = client.head_handler.do_decode(data)
-    #     print(header)
+    # client.close()
+    while True:
+        data = client.client_socket.recv(1024)
+        header = client.head_handler.do_decode(data)
+        msg = client.msg_handler.do_decode(data)
+        print(header)
+        print(msg)
