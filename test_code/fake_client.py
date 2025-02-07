@@ -1,5 +1,6 @@
 import socket
 import struct
+import time
 
 from backend.op_code import OpCode
 from backend.parser import HeadParser, QueryParser, ReplyParser, MSGParser
@@ -73,6 +74,7 @@ class MongoDBClient:
         # binary_file = "json_request/hello_next.bin"
         # msg = read_binary_request(binary_file)
         from json_request.hello_next import payload
+        print(payload)
         msg = self.msg_handler.do_encode(payload)
         self.send_message(OpCode.OP_MSG, msg)
         print("Sent `MSG` request to MongoDB server")
@@ -91,9 +93,11 @@ if __name__ == "__main__":
     client.request_hello()
     client.request_hello_next()
     # client.close()
+    response_start = time.time()
     while True:
         data = client.client_socket.recv(1024)
         header = client.head_handler.do_decode(data)
         msg = client.msg_handler.do_decode(data)
         print(header)
         print(msg)
+        print(time.time() - response_start)

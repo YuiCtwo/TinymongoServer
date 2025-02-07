@@ -1,6 +1,6 @@
 import sys
 
-from bson import ObjectId
+from bson import ObjectId, int64
 import struct
 
 payload = {
@@ -9,8 +9,8 @@ payload = {
 		'hello': 1,
 		'maxAwaitTimeMS': 10000,
 		'topologyVersion': {
-			'processId': ObjectId('679f5fe50ab84b41447995a7'),
-			'counter': sys.maxsize
+			'processId': ObjectId(),
+			'counter': int64.Int64(0)
 		},
 		'$db': 'admin'
 	}]

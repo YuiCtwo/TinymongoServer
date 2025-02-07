@@ -310,8 +310,8 @@ class MSGParser(MongoDBParser):
             if not crc32_checksum(data[:-4], checksum):
                 server_logger.warning("CRC-32C checksum failed, discard the message.")
                 return {}
-        with open("hello_next.bin", "wb") as f:
-            f.write(data[16:])
+        # with open("hello_next.bin", "wb") as f:
+        #     f.write(data[16:])
         sections = []
         while offset < len(data):
             # one 8-bit number represents one kind of section

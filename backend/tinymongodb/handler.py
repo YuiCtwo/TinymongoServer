@@ -1,6 +1,7 @@
 import sys
-from datetime import datetime, timezone
+import time
 
+from datetime import datetime, timezone
 from bson import ObjectId
 
 from backend.parser import *
@@ -166,8 +167,11 @@ class TinyMongoDBBackend:
                 # no more to come, handle the payload
                 if "hello" in sections0 and sections0["hello"] == 1:
                     # handle hello
+                    max_await_time_ms = sections0["maxAwaitTimeMS"]
                     return_sections = self.handle_msg_hello(payload)
                     return {
+                        "is_hello": True,
+                        "maxAwaitTimeMS": max_await_time_ms,
                         "flagBits": return_flags,
                         "sections": [return_sections]
                     }
@@ -183,7 +187,7 @@ class TinyMongoDBBackend:
             'isWritablePrimary': True,
             'topologyVersion': {
                 'processId': ObjectId(),
-                'counter': 0
+                'counter': bson.int64.Int64(0)
             },
             'maxBsonObjectSize': 16777216,
             'maxMessageSizeBytes': 48000000,
@@ -210,8 +214,7 @@ class TinyMongoDBBackend:
                 'ismaster': True,
                 'topologyVersion': {
                     'processId': ObjectId(),
-                    # TODO: Long type is required, but for 0 in Python, it is int32 by default.
-                    'counter': sys.maxsize
+                    'counter': bson.int64.Int64(0)
                 },
                 'maxBsonObjectSize': 16777216,
                 'maxMessageSizeBytes': 48000000,
