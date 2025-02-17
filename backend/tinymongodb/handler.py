@@ -8,9 +8,6 @@ from backend.parser import *
 from tinymongo import TinyMongoClient
 from utils.logger import server_logger
 
-def number2long(num):
-    return struct.unpack("<q", struct.pack("<q", num))[0]
-
 
 class TinyMongoDBBackend:
 
@@ -41,6 +38,7 @@ class TinyMongoDBBackend:
             OpCode.OP_MSG: MSGParser(),
         }
         self.connection_id = 1
+        self.object_id = ObjectId()
 
     def handle_decode(self, op_code, data):
         # used for testing only
@@ -153,7 +151,6 @@ class TinyMongoDBBackend:
             is_checksumPresent = payload["flagBits"] & 1
             is_moreToCome = (payload["flagBits"] >> 1) & 1
             is_exhaustAllowed = (payload["flagBits"] >> 16) & 1
-            print(is_checksumPresent, is_moreToCome, is_exhaustAllowed)
             if is_checksumPresent:
                 return_flags += 1
             if is_exhaustAllowed:
@@ -175,8 +172,12 @@ class TinyMongoDBBackend:
                         "flagBits": return_flags,
                         "sections": [return_sections]
                     }
-                else:
-                    pass
+                elif "ping" in sections0 and sections0["ping"] == 1:
+                    # handle ping
+                    return {
+                        "flagBits": 0,
+                        "sections": [{"ok": 1.0}]
+                    }
 
         else:
             self.logger.warning("Skipping payload without flagBits.")
@@ -186,7 +187,7 @@ class TinyMongoDBBackend:
         return {
             'isWritablePrimary': True,
             'topologyVersion': {
-                'processId': ObjectId(),
+                'processId': self.object_id,
                 'counter': bson.int64.Int64(0)
             },
             'maxBsonObjectSize': 16777216,
@@ -213,7 +214,7 @@ class TinyMongoDBBackend:
                 'helloOk': True,
                 'ismaster': True,
                 'topologyVersion': {
-                    'processId': ObjectId(),
+                    'processId': self.object_id,
                     'counter': bson.int64.Int64(0)
                 },
                 'maxBsonObjectSize': 16777216,

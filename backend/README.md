@@ -112,8 +112,6 @@ OP_MSG {
 
 详细的 hello 命令可以参考官方文档 https://www.mongodb.com/zh-cn/docs/manual/reference/command/hello/#mongodb-dbcommand-dbcmd.hello
 
-
-
 经过测试 返回的响应类似下面的内容：
 ```txt
 {
@@ -197,3 +195,609 @@ OP_MSG {
 
 因为我们在请求的时候设置了 exhaustAllowed 位，所以返回的响应中才会在第一个位上有 1。
 顺便一提如果请求出现错误，那么返回的 flagBits 应该全部设置为 0。
+
+接着会发送另外一个 OP_MSG：
+```text
+{'flagBits': 0, 'sections': [{'ping': 1, 'lsid': {'id': Binary(b'\xad\x98\xeb\xe2\xa1\xf5G\xef\xbd\xcc\xde\x01H\xaeA\xa9', 4)}, '$db': 'admin'}]}
+```
+跟据官方文档：
+> ping 命令是一个空操作，用于测试服务器是否在响应命令。即使服务器处于写锁定状态，此命令也会立即返回：
+> lsid 指定与该命令关联的会话的唯一 ID
+
+针对这个请求的回答就十分简单了，一个简单的 `{ok: 1.0}` 响应。
+到这一步，Compass 上已经弹出服务器连接成功的提示框了
+接下来发的请求就是一些管理相关的命令。
+
+同时我们的所有响应，目前都是仅仅发送一次，如果你去模拟客户端，实际情况下 针对 hello 的 响应，MongoDB 的服务器会不断地重发相同的响应内容，
+这块我们留到会话管理模块的时候再实现并重构现在的代码。
+
+# Admin Commands
+```text
+{
+	'flagBits': 0,
+	'sections': [{
+		'aggregate': 1,
+		'pipeline': [{
+			'$currentOp': {
+				'allUsers': True,
+				'idleConnections': False,
+				'truncateOps': False
+			}
+		}],
+		'cursor': {},
+		'lsid': {
+			'id': Binary(b '\xcb\xf3\xe4\x99\xca|H\xe7\x9eqZ\xea<k\xec\x91', 4)
+		},
+		'$db': 'admin'
+	}]
+}
+```
+注意这些命令都是用额外的客户端端口来发送的，请求都长的大同小异。
+
+```text
+{
+	'flagBits': 0,
+	'sections': [{
+		'cursor': {
+			'firstBatch': [{
+				'type': 'op',
+				'host': 'LAPTOP-9CCGINFM:27017',
+				'desc': 'conn10',
+				'connectionId': 10,
+				'client': '127.0.0.1:65120',
+				'active': True,
+				'currentOpTime': '2025-02-17T16:17:01.338+08:00',
+				'isFromUserConnection': True,
+				'threaded': True,
+				'opid': 51200,
+				'lsid': {
+					'id': Binary(b '?\x005\x1dI\x1fD\xcd\x9d\x94\xae\xdd/\xf7\xacI', 4),
+					'uid': b "\xe3\xb0\xc4B\x98\xfc\x1c\x14\x9a\xfb\xf4\xc8\x99o\xb9$'\xaeA\xe4d\x9b\x93L\xa4\x95\x99\x1bxR\xb8U"
+				},
+				'secs_running': 0,
+				'microsecs_running': 85,
+				'op': 'command',
+				'ns': 'admin.$cmd.aggregate',
+				'redacted': False,
+				'command': {
+					'aggregate': 1,
+					'pipeline': [{
+						'$currentOp': {
+							'allUsers': True,
+							'idleConnections': False,
+							'truncateOps': False
+						}
+					}],
+					'cursor': {},
+					'lsid': {
+						'id': Binary(b '?\x005\x1dI\x1fD\xcd\x9d\x94\xae\xdd/\xf7\xacI', 4)
+					},
+					'$db': 'admin'
+				},
+				'queryFramework': 'classic',
+				'numYields': 0,
+				'queues': {
+					'execution': {
+						'admissions': 0,
+						'totalTimeQueuedMicros': 0
+					},
+					'ingress': {
+						'admissions': 1,
+						'totalTimeQueuedMicros': 0
+					}
+				},
+				'currentQueue': None,
+				'locks': {},
+				'waitingForLock': False,
+				'lockStats': {},
+				'waitingForFlowControl': False,
+				'flowControlStats': {}
+			}, {
+				'type': 'op',
+				'host': 'LAPTOP-9CCGINFM:27017',
+				'desc': 'Checkpointer',
+				'active': True,
+				'currentOpTime': '2025-02-17T16:17:01.338+08:00',
+				'isFromUserConnection': False,
+				'opid': 4131,
+				'op': 'none',
+				'ns': '',
+				'redacted': False,
+				'command': {},
+				'numYields': 0,
+				'queues': {
+					'execution': {
+						'admissions': 0,
+						'totalTimeQueuedMicros': 0
+					},
+					'ingress': {
+						'admissions': 0,
+						'totalTimeQueuedMicros': 0
+					}
+				},
+				'currentQueue': None,
+				'locks': {},
+				'waitingForLock': False,
+				'lockStats': {},
+				'waitingForFlowControl': False,
+				'flowControlStats': {}
+			}, {
+				'type': 'op',
+				'host': 'LAPTOP-9CCGINFM:27017',
+				'desc': 'JournalFlusher',
+				'active': True,
+				'currentOpTime': '2025-02-17T16:17:01.338+08:00',
+				'isFromUserConnection': False,
+				'opid': 3072,
+				'op': 'none',
+				'ns': '',
+				'redacted': False,
+				'command': {},
+				'numYields': 0,
+				'queues': {
+					'execution': {
+						'admissions': 0,
+						'totalTimeQueuedMicros': 0
+					},
+					'ingress': {
+						'admissions': 0,
+						'totalTimeQueuedMicros': 0
+					}
+				},
+				'currentQueue': None,
+				'locks': {},
+				'waitingForLock': False,
+				'lockStats': {},
+				'waitingForFlowControl': False,
+				'flowControlStats': {}
+			}],
+			'id': 0,
+			'ns': 'admin.$cmd.aggregate'
+		},
+		'ok': 1.0
+	}]
+}
+```
+
+- top
+具体命令参考[官方文档](https://www.mongodb.com/zh-cn/docs/manual/reference/command/top/)
+```text
+{
+	'flagBits': 0,
+	'sections': [{
+		'top': 1,
+		'lsid': {
+			'id': Binary(b 'l\xf3\xceRD\x08I\xf9\x8bV\x14\x91\x88aDL', 4)
+		},
+		'$db': 'admin'
+	}]
+}
+```
+
+```text
+{
+	'flagBits': 0,
+	'sections': [{
+		'totals': {
+			'note': 'all times in microseconds',
+			'admin.$cmd.aggregate': {
+				'total': {
+					'time': 214,
+					'count': 2
+				},
+				'readLock': {
+					'time': 0,
+					'count': 0
+				},
+				'writeLock': {
+					'time': 0,
+					'count': 0
+				},
+				'queries': {
+					'time': 0,
+					'count': 0
+				},
+				'getmore': {
+					'time': 0,
+					'count': 0
+				},
+				'insert': {
+					'time': 0,
+					'count': 0
+				},
+				'update': {
+					'time': 0,
+					'count': 0
+				},
+				'remove': {
+					'time': 0,
+					'count': 0
+				},
+				'commands': {
+					'time': 214,
+					'count': 2
+				}
+			},
+			'admin.atlascli': {
+				'total': {
+					'time': 994,
+					'count': 2
+				},
+				'readLock': {
+					'time': 994,
+					'count': 2
+				},
+				'writeLock': {
+					'time': 0,
+					'count': 0
+				},
+				'queries': {
+					'time': 0,
+					'count': 0
+				},
+				'getmore': {
+					'time': 0,
+					'count': 0
+				},
+				'insert': {
+					'time': 0,
+					'count': 0
+				},
+				'update': {
+					'time': 0,
+					'count': 0
+				},
+				'remove': {
+					'time': 0,
+					'count': 0
+				},
+				'commands': {
+					'time': 994,
+					'count': 2
+				}
+			},
+			'admin.system.version': {
+				'total': {
+					'time': 182,
+					'count': 1
+				},
+				'readLock': {
+					'time': 182,
+					'count': 1
+				},
+				'writeLock': {
+					'time': 0,
+					'count': 0
+				},
+				'queries': {
+					'time': 0,
+					'count': 0
+				},
+				'getmore': {
+					'time': 0,
+					'count': 0
+				},
+				'insert': {
+					'time': 0,
+					'count': 0
+				},
+				'update': {
+					'time': 0,
+					'count': 0
+				},
+				'remove': {
+					'time': 0,
+					'count': 0
+				},
+				'commands': {
+					'time': 0,
+					'count': 0
+				}
+			},
+			'config.system.sessions': {
+				'total': {
+					'time': 4364,
+					'count': 21
+				},
+				'readLock': {
+					'time': 895,
+					'count': 16
+				},
+				'writeLock': {
+					'time': 3469,
+					'count': 5
+				},
+				'queries': {
+					'time': 0,
+					'count': 0
+				},
+				'getmore': {
+					'time': 0,
+					'count': 0
+				},
+				'insert': {
+					'time': 0,
+					'count': 0
+				},
+				'update': {
+					'time': 0,
+					'count': 0
+				},
+				'remove': {
+					'time': 3469,
+					'count': 5
+				},
+				'commands': {
+					'time': 895,
+					'count': 16
+				}
+			},
+			'config.transactions': {
+				'total': {
+					'time': 1137,
+					'count': 8
+				},
+				'readLock': {
+					'time': 1137,
+					'count': 8
+				},
+				'writeLock': {
+					'time': 0,
+					'count': 0
+				},
+				'queries': {
+					'time': 1137,
+					'count': 8
+				},
+				'getmore': {
+					'time': 0,
+					'count': 0
+				},
+				'insert': {
+					'time': 0,
+					'count': 0
+				},
+				'update': {
+					'time': 0,
+					'count': 0
+				},
+				'remove': {
+					'time': 0,
+					'count': 0
+				},
+				'commands': {
+					'time': 0,
+					'count': 0
+				}
+			},
+			'local.startup_log': {
+				'total': {
+					'time': 1577,
+					'count': 2
+				},
+				'readLock': {
+					'time': 1577,
+					'count': 2
+				},
+				'writeLock': {
+					'time': 0,
+					'count': 0
+				},
+				'queries': {
+					'time': 0,
+					'count': 0
+				},
+				'getmore': {
+					'time': 0,
+					'count': 0
+				},
+				'insert': {
+					'time': 0,
+					'count': 0
+				},
+				'update': {
+					'time': 0,
+					'count': 0
+				},
+				'remove': {
+					'time': 0,
+					'count': 0
+				},
+				'commands': {
+					'time': 1577,
+					'count': 2
+				}
+			},
+			'local.system.replset': {
+				'total': {
+					'time': 14,
+					'count': 1
+				},
+				'readLock': {
+					'time': 14,
+					'count': 1
+				},
+				'writeLock': {
+					'time': 0,
+					'count': 0
+				},
+				'queries': {
+					'time': 0,
+					'count': 0
+				},
+				'getmore': {
+					'time': 0,
+					'count': 0
+				},
+				'insert': {
+					'time': 0,
+					'count': 0
+				},
+				'update': {
+					'time': 0,
+					'count': 0
+				},
+				'remove': {
+					'time': 0,
+					'count': 0
+				},
+				'commands': {
+					'time': 0,
+					'count': 0
+				}
+			}
+		},
+		'ok': 1.0
+	}]
+}
+```
+
+- buildInfo
+
+```text
+{
+	'flagBits': 0,
+	'sections': [{
+		'version': '8.0.4',
+		'gitVersion': 'bc35ab4305d9920d9d0491c1c9ef9b72383d31f9',
+		'targetMinOS': 'Windows 7/Windows Server 2008 R2',
+		'modules': [],
+		'allocator': 'tcmalloc-gperf',
+		'javascriptEngine': 'mozjs',
+		'sysInfo': 'deprecated',
+		'versionArray': [8, 0, 4, 0],
+		'openssl': {
+			'running': 'Windows SChannel'
+		},
+		'buildEnvironment': {
+			'distmod': 'windows',
+			'distarch': 'x86_64',
+			'cc': 'cl: Microsoft (R) C/C++ Optimizing Compiler Version 19.31.31107 for x64',
+			'ccflags': '/nologo /WX /FImongo/platform/basic.h /fp:strict /EHsc /W3 /wd4068 /wd4244 /wd4267 /wd4290 /wd4351 /wd4355 /wd4373 /wd4800 /wd4251 /wd4291 /we4013 /we4099 /we4930 /errorReport:none /MD /O2 /Oy- /bigobj /utf-8 /permissive- /Zc:__cplusplus /Zc:sizedDealloc /volatile:iso /diagnostics:caret /std:c++20 /Gw /Gy /Zc:inline',
+			'cxx': 'cl: Microsoft (R) C/C++ Optimizing Compiler Version 19.31.31107 for x64',
+			'cxxflags': '/TP',
+			'linkflags': '/nologo /DEBUG /INCREMENTAL:NO /LARGEADDRESSAWARE /OPT:REF',
+			'target_arch': 'x86_64',
+			'target_os': 'windows',
+			'cppdefines': 'SAFEINT_USE_INTRINSICS 0 PCRE2_STATIC NDEBUG BOOST_ALL_NO_LIB _UNICODE UNICODE _SILENCE_CXX17_ALLOCATOR_VOID_DEPRECATION_WARNING _SILENCE_CXX17_OLD_ALLOCATOR_MEMBERS_DEPRECATION_WARNING _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING _SILENCE_ALL_CXX20_DEPRECATION_WARNINGS _CONSOLE _CRT_SECURE_NO_WARNINGS _ENABLE_EXTENDED_ALIGNED_STORAGE _SCL_SECURE_NO_WARNINGS _WIN32_WINNT 0x0A00 BOOST_USE_WINAPI_VERSION 0x0A00 NTDDI_VERSION 0x0A000000 ABSL_FORCE_ALIGNED_ACCESS BOOST_ENABLE_ASSERT_DEBUG_HANDLER BOOST_FILESYSTEM_NO_CXX20_ATOMIC_REF BOOST_LOG_NO_SHORTHAND_NAMES BOOST_LOG_USE_NATIVE_SYSLOG BOOST_LOG_WITHOUT_THREAD_ATTR BOOST_MATH_NO_LONG_DOUBLE_MATH_FUNCTIONS BOOST_SYSTEM_NO_DEPRECATED BOOST_THREAD_USES_DATETIME BOOST_THREAD_VERSION 5'
+		},
+		'bits': 64,
+		'debug': False,
+		'maxBsonObjectSize': 16777216,
+		'storageEngines': ['devnull', 'wiredTiger'],
+		'ok': 1.0
+	}]
+}
+```
+
+- hostInfo
+
+```text
+{
+	'flagBits': 0,
+	'sections': [{
+		'system': {
+			'currentTime': datetime.datetime(2025, 2, 17, 8, 17, 1, 340000),
+			'hostname': 'LAPTOP-9CCGINFM',
+			'cpuAddrSize': 64,
+			'memSizeMB': 32386,
+			'memLimitMB': 32386,
+			'numCores': 32,
+			'numCoresAvailableToProcess': 32,
+			'numPhysicalCores': 24,
+			'numCpuSockets': 1,
+			'cpuArch': 'x86_64',
+			'numaEnabled': False,
+			'numNumaNodes': 1
+		},
+		'os': {
+			'type': 'Windows',
+			'name': 'Microsoft Windows 10',
+			'version': '10.0 (build 22631)'
+		},
+		'extra': {
+			'pageSize': 4096,
+			'cpuString': 'Intel(R) Core(TM) i9-14900HX'
+		},
+		'ok': 1.0
+	}]
+}
+```
+
+- getParameter
+`{'getParameter': 1, 'featureCompatibilityVersion': 1}`
+- atlasVersion
+- connectionStatus
+`{'connectionStatus': 1, 'showPrivileges': True}`
+```text
+{
+	'flagBits': 0,
+	'sections': [{
+		'aggregate': 'atlascli',
+		'pipeline': [{
+			'$match': {
+				'managedClusterType': 'atlasCliLocalDevCluster'
+			}
+		}, {
+			'$group': {
+				'_id': 1,
+				'n': {
+					'$sum': 1
+				}
+			}
+		}],
+		'cursor': {},
+		'lsid': {
+			'id': Binary(b '\xdf\xc3\xa1\xb4\t]@\x90\x89\xc0hx`\xb4+\xa7', 4)
+		},
+		'$db': 'admin'
+	}]
+}
+```
+
+# EndSession
+如果你手动的终止 Compass 客户端与服务端的连接，那么服务端会收到一个我叫做 EndSession 的请求。
+它看起来像下面这样，如果仔细观察，你会发现它的 sections 数组中包含了所有当前连接的 session 的 id。
+```text
+{
+	'flagBits': 0,
+	'sections': [{
+		'endSessions': [{
+			'id': Binary(b '}\xa6\x18\xa6\x18\xccIl\xb2!\x84\xdf\x8e0\x13\xc6', 4)
+		}, {
+			'id': Binary(b '\no\x13W\x0c\x07H\x93\x9bPqD\x9a\x7f\x86\xf5', 4)
+		}, {
+			'id': Binary(b '\x00\x8bO\xff,\x89E\xe4\xb2m\xc3\x8c!7Z\xbe', 4)
+		}, {
+			'id': Binary(b '\x8f\xdf\xe0\x07\xdbpI\xbe\xac\r\xcdb\x0e\x9f*E', 4)
+		}, {
+			'id': Binary(b '\x85l\x08\x14\x99z@\xc3\xa6\x19\xae\xb0\x8f\r\xce\xa2', 4)
+		}, {
+			'id': Binary(b '\xe7EbJ\x11\x91K\xc7\xb1\xff\xf9\xc3\x81J\xdem', 4)
+		}, {
+			'id': Binary(b '\xde0bQ#cM\xe9\x90\xd1\x16\xc3[\xca\xa9C', 4)
+		}, {
+			'id': Binary(b '\x11\xc0o\xe3\x7f\x02H:\x80\xe8"\n\x1b\xdc\xf2\xc1', 4)
+		}, {
+			'id': Binary(b '\x03\r\x94\x82lFF\x92\xa1Z\x8dV\xf3O\x0b<', 4)
+		}, {
+			'id': Binary(b '\xcap\xc6\x940\xf2G\xa5\xa3\x83\x10UC\xa8>\x89', 4)
+		}, {
+			'id': Binary(b 'l\xf3\xceRD\x08I\xf9\x8bV\x14\x91\x88aDL', 4)
+		}, {
+			'id': Binary(b '\x9c\xc0\xbc\xe2}\xabJ\xf3\xa4>\xf6Q!\xe1\xfe~', 4)
+		}, {
+			'id': Binary(b '\xdf\xc3\xa1\xb4\t]@\x90\x89\xc0hx`\xb4+\xa7', 4)
+		}, {
+			'id': Binary(b '\xc6\x13\x04\x95\xc2\x94G\x00\xac\x11\nc\x9dz@\xde', 4)
+		}],
+		'lsid': {
+			'id': Binary(b '}\xa6\x18\xa6\x18\xccIl\xb2!\x84\xdf\x8e0\x13\xc6', 4)
+		},
+		'$db': 'admin'
+	}]
+}
+```
+涉及到会话的管理，目前我们还没有做，先搁置一下吧。
+> endSessions 命令将会话标记为已过期，以向服务器发出信号以清理会话并更新会话的过期时间。该命令会覆盖会话在过期之前等待的超时时间。
+

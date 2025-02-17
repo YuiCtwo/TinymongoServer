@@ -1,6 +1,7 @@
 import socket
 import struct
 import time
+import threading
 
 from backend.op_code import OpCode
 from backend.parser import HeadParser, QueryParser, ReplyParser, MSGParser
@@ -70,15 +71,14 @@ class MongoDBClient:
         result["op_code"] = header["op_code"]
         print(result)
 
-    def request_hello_next(self):
+    def request_hello_msg(self):
         # binary_file = "json_request/hello_next.bin"
         # msg = read_binary_request(binary_file)
         from json_request.hello_next import payload
-        print(payload)
         msg = self.msg_handler.do_encode(payload)
         self.send_message(OpCode.OP_MSG, msg)
         print("Sent `MSG` request to MongoDB server")
-        response_raw = self.client_socket.recv(1024)
+        response_raw = self.client_socket.recv(4096)
         header = self.head_handler.do_decode(response_raw)
         result = self.msg_handler.do_decode(response_raw)
         result["response_length"] = header["message_length"]
@@ -87,17 +87,67 @@ class MongoDBClient:
         result["op_code"] = header["op_code"]
         print(result)
 
+    def request_admin_command(self):
+        from json_request.admin_command import payload_agg
+        msg = self.msg_handler.do_encode(payload_agg)
+        self.send_message(OpCode.OP_MSG, msg)
+        print("Sent `agg` request to MongoDB server")
+        response_raw = self.client_socket.recv(4096)
+        result = self.msg_handler.do_decode(response_raw)
+        print(result)
 
-if __name__ == "__main__":
+    def request_buildInfo(self):
+        from json_request.admin_command import payload_buildInfo
+        msg = self.msg_handler.do_encode(payload_buildInfo)
+        self.send_message(OpCode.OP_MSG, msg)
+        print("Sent `buildInfo` request to MongoDB server")
+        response_raw = self.client_socket.recv(4096)
+        result = self.msg_handler.do_decode(response_raw)
+        print(result)
+
+    def request_top(self):
+        from json_request.admin_command import payload_top
+        msg = self.msg_handler.do_encode(payload_top)
+        self.send_message(OpCode.OP_MSG, msg)
+        print("Sent `top` request to MongoDB server")
+        response_raw = self.client_socket.recv(4096)
+        result = self.msg_handler.do_decode(response_raw)
+        print(result)
+
+    def request_hostInfo(self):
+        from json_request.admin_command import payload_hostInfo
+        msg = self.msg_handler.do_encode(payload_hostInfo)
+        self.send_message(OpCode.OP_MSG, msg)
+        print("Sent `hostInfo` request to MongoDB server")
+        response_raw = self.client_socket.recv(4096)
+        result = self.msg_handler.do_decode(response_raw)
+        print(result)
+
+def thread_function1():
     client = MongoDBClient(host='127.0.0.1', port=27017)
     client.request_hello()
-    client.request_hello_next()
-    # client.close()
-    response_start = time.time()
-    while True:
-        data = client.client_socket.recv(1024)
-        header = client.head_handler.do_decode(data)
-        msg = client.msg_handler.do_decode(data)
-        print(header)
-        print(msg)
-        print(time.time() - response_start)
+    client.request_hello_msg()
+    client.close()
+
+def thread_function2():
+    client = MongoDBClient(host='127.0.0.1', port=27017)
+    client.request_admin_command()
+    client.request_buildInfo()
+    client.request_top()
+    client.request_hostInfo()
+    client.close()
+
+if __name__ == "__main__":
+    thread1 = threading.Thread(target=thread_function1)
+    thread2 = threading.Thread(target=thread_function2)
+    thread1.start()
+    thread2.start()
+    thread1.join()
+    thread2.join()
+    # while True:
+    #     data = client.client_socket.recv(1024)
+    #     header = client.head_handler.do_decode(data)
+    #     msg = client.msg_handler.do_decode(data)
+    #     print(header)
+    #     print(msg)
+        # print(time.time() - response_start)

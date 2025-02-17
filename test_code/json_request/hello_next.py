@@ -1,8 +1,4 @@
-import sys
-
 from bson import ObjectId, int64
-import struct
-
 payload = {
 	'flagBits': 65536,
 	'sections': [{

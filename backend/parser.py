@@ -317,6 +317,7 @@ class MSGParser(MongoDBParser):
             # one 8-bit number represents one kind of section
             kind = struct.unpack("<b", data[offset:offset+1])[0]
             offset += 1
+            print(f"kind = {kind}")
             if kind == 0:
                 # Type 0: single document section
                 offset, document = byte2document(data, offset)
