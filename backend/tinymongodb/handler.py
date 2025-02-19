@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 
 from backend.parser import *
+from backend.server_env import get_base_env, get_build_info, get_host_info
 from tinymongo import TinyMongoClient
 from utils.logger import server_logger
 
@@ -27,6 +28,7 @@ class TinyMongoDBBackend:
             OpCode.OP_COMPRESSED: self.handle_compressed,
             OpCode.OP_MSG: self.handle_msg,
         }
+
         self.op_parser_mapping = {
             OpCode.OP_INSERT: InsertParser(),
             OpCode.OP_UPDATE: UpdateParser(),
@@ -39,6 +41,32 @@ class TinyMongoDBBackend:
         }
         self.connection_id = 1
         self.object_id = ObjectId()
+        # fill up fundamental data in the database
+        self.server_database_setup()
+
+    def server_database_setup(self):
+        # create a database named "admin", "config", "local"
+        required_databases = [
+            "admin.$cmd.aggregate",
+            "admin.atlascli",
+            "admin.system.version",
+            "config.system.sessions",
+            "config.transactions",
+            "local.startup_log",
+            "local.system.replset",
+        ]
+        for db_str in required_databases:
+            database_strs = db_str.split(".")
+            if len(database_strs) != 2:
+                # TODO: understand these confusing structure of database
+                continue
+            else:
+                collection_name, table_name = database_strs
+                # the database will be created automatically when we access it if it doesn't exist
+                collection = getattr(self.backend, collection_name)
+                table = getattr(collection, table_name)
+
+
 
     def handle_decode(self, op_code, data):
         # used for testing only
@@ -162,71 +190,71 @@ class TinyMongoDBBackend:
                 sections = payload["sections"]
                 sections0 = sections[0]
                 # no more to come, handle the payload
+                # handle admin & hello command
                 if "hello" in sections0 and sections0["hello"] == 1:
-                    # handle hello
-                    max_await_time_ms = sections0["maxAwaitTimeMS"]
                     return_sections = self.handle_msg_hello(payload)
-                    return {
-                        "is_hello": True,
-                        "maxAwaitTimeMS": max_await_time_ms,
-                        "flagBits": return_flags,
-                        "sections": [return_sections]
-                    }
                 elif "ping" in sections0 and sections0["ping"] == 1:
-                    # handle ping
-                    return {
-                        "flagBits": 0,
-                        "sections": [{"ok": 1.0}]
-                    }
+                    return_sections = [{"ok": 1.0}]
+                elif "top" in sections0 and sections0["top"] == 1:
+                    return_sections = self.handle_top(payload)
+                elif "buildInfo" in sections0 and sections0["buildInfo"] == 1:
+                    return_sections = self.handle_buildInfo(payload)
+                elif "hostInfo" in sections0 and sections0["hostInfo"] == 1:
+                    return_sections = self.handle_hostInfo(payload)
+                else:
+                    return_sections = [{"ok": 1.0}]
 
+                return {
+                    "flagBits": return_flags,
+                    "sections": return_sections
+                }
         else:
             self.logger.warning("Skipping payload without flagBits.")
-        return {}
+            return {}
 
     def handle_msg_hello(self, payload):
-        return {
-            'isWritablePrimary': True,
-            'topologyVersion': {
-                'processId': self.object_id,
-                'counter': bson.int64.Int64(0)
-            },
-            'maxBsonObjectSize': 16777216,
-            'maxMessageSizeBytes': 48000000,
-            'maxWriteBatchSize': 100000,
-            'logicalSessionTimeoutMinutes': 30,
-            'localTime': datetime.now(),
-            'connectionId': self.connection_id,
-            'minWireVersion': 0,
-            'maxWireVersion': 25,
-            'readOnly': False,
-            'ok': 1.0
+        base_env_info = get_base_env()
+
+        base_env_info['isWritablePrimary'] = True
+        base_env_info['topologyVersion'] = {
+            'processId': self.object_id,
+            'counter': bson.int64.Int64(0)
         }
+        base_env_info['connectionId'] = self.connection_id
+        base_env_info['ok'] = 1.0
+
+        return [base_env_info]
 
     def handle_hello(self, payload):
         # hello-master do not support for TinyMongo backend
         # so we just return a fake response
+        base_env_info = get_base_env()
+        base_env_info['topologyVersion'] = {
+            'processId': self.object_id,
+            'counter': bson.int64.Int64(0)
+        }
+        base_env_info['connectionId'] = self.connection_id
+        base_env_info['ok'] = 1.0
+        base_env_info['helloOk'] = True
+        base_env_info['ismaster'] = True
         return {
             "responseFlags": 8,
             "cursorID": 0,
             "startingFrom": 0,
             'numberReturned': 1,
-            "documents": [{
-                'helloOk': True,
-                'ismaster': True,
-                'topologyVersion': {
-                    'processId': self.object_id,
-                    'counter': bson.int64.Int64(0)
-                },
-                'maxBsonObjectSize': 16777216,
-                'maxMessageSizeBytes': 48000000,
-                'maxWriteBatchSize': 100000,
-
-                'logicalSessionTimeoutMinutes': 30,
-                'localTime': datetime.now(),
-                'connectionId': self.connection_id,
-                'minWireVersion': 0,
-                'maxWireVersion': 25,
-                'readOnly': False,
-                'ok': 1.0
-            }]
+            "documents": [base_env_info]
         }
+
+    def handle_buildInfo(self, payload):
+        build_info = get_build_info()
+        build_info['ok'] = 1.0
+        return [build_info]
+
+    def handle_hostInfo(self, payload):
+        host_info = get_host_info()
+        host_info['ok'] = 1.0
+        return [host_info]
+
+    def handle_top(self, payload):
+        databases = self.backend.list_database_names()
+        return [{}]
