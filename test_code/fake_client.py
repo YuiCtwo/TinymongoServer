@@ -123,6 +123,14 @@ class MongoDBClient:
         result = self.msg_handler.do_decode(response_raw)
         print(result)
 
+    def request_any_info(self, payload):
+        msg = self.msg_handler.do_encode(payload)
+        self.send_message(OpCode.OP_MSG, msg)
+        print("Sent `Info` request to MongoDB server")
+        response_raw = self.client_socket.recv(4096)
+        result = self.msg_handler.do_decode(response_raw)
+        print(result)
+
 def thread_function1():
     client = MongoDBClient(host='127.0.0.1', port=27017)
     client.request_hello()
@@ -131,10 +139,15 @@ def thread_function1():
 
 def thread_function2():
     client = MongoDBClient(host='127.0.0.1', port=27017)
-    client.request_admin_command()
-    client.request_buildInfo()
-    client.request_top()
-    client.request_hostInfo()
+    # client.request_admin_command()
+    # client.request_buildInfo()
+    # client.request_top()
+    # client.request_hostInfo()
+    import json_request.admin_command as command
+    client.request_any_info(command.payload_atlasVersion)
+    client.request_any_info(command.payload_getParameter)
+    client.request_any_info(command.payload_listDatabases)
+    client.request_any_info(command.payload_dbStats)
     client.close()
 
 if __name__ == "__main__":

@@ -73,5 +73,42 @@ def test_query(collection_setup):
     print(query_result_list)
     assert True
 
+def test_insert_query_dbs(collection_setup):
+
+    required_databases = [
+        "admin.database",
+        "admin.system",
+        "config.system",
+        "local.startup_log",
+    ]
+    for db_str in required_databases:
+        database_strs = db_str.split(".")
+        collection_name, table_name = database_strs
+        # the database will be created automatically when we access it if it doesn't exist
+        collection = getattr(collection_setup[2], collection_name)
+        table = getattr(collection, table_name)
+        table.find()
+    admin_table = collection_setup[2].admin.database
+    created_dbs = [
+        {"name": "config"},
+        {"name": "local"}
+    ]
+    admin_table.insert_many(created_dbs)
+    # ============== find all method 1
+    query_result = admin_table.find()
+    db_num = admin_table.count()
+    query_result_list = [query_result[i] for i in range(db_num)]
+    print(query_result_list)
+    config_db = getattr(collection_setup[2], query_result_list[0]["name"])
+    assert db_num == 2
+    assert "system" in config_db.collection_names()
+    # ============== find all method 2
+    # query_result = admin_table.find(filter={"name":1, "_id": 0})
+    # db_num = admin_table.count()
+    # query_result_list = [query_result[i] for i in range(db_num)]
+    # print(query_result_list)
+    # assert db_num == 3
+
+
 if __name__ == '__main__':
     pytest.main()

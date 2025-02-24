@@ -651,9 +651,11 @@ OP_MSG {
 	}]
 }
 ```
+readLock 和 writeLock 指的是读写锁的持有时间和次数。
+很明显是和多客户端并发读写一致性相关的东西，现阶段还不需要（其实是不会写）
+这样的话我们的返回就很简单了，遍历每一个存在的集合返回一个全部都是 0 的集合就完了。
 
 - buildInfo
-
 ```text
 {
 	'flagBits': 0,
@@ -727,6 +729,8 @@ OP_MSG {
 - getParameter
 `{'getParameter': 1, 'featureCompatibilityVersion': 1}`
 - atlasVersion
+`{'atlasVersion': 1}`
+抓包看的是返回了一个 error msg 的格式，内容是没有这个命令
 - connectionStatus
 `{'connectionStatus': 1, 'showPrivileges': True}`
 ```text
@@ -754,6 +758,12 @@ OP_MSG {
 	}]
 }
 ```
+- listDatabases
+`{'listDatabases: 1, 'nameOnly': True}`
+- dbStats
+`{'dbStats': 1}`
+
+
 
 # EndSession
 如果你手动的终止 Compass 客户端与服务端的连接，那么服务端会收到一个我叫做 EndSession 的请求。

@@ -79,5 +79,9 @@ def get_build_info():
     }
     return result
 
+def get_auth_info():
+    result = {}
+    return result
+
 if __name__ == '__main__':
     print(get_host_info())

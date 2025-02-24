@@ -1,9 +1,11 @@
+import random
 import sys
 import time
 
 from datetime import datetime, timezone
 from bson import ObjectId
 
+from backend.op_code import get_code_name, ErrorCode
 from backend.parser import *
 from backend.server_env import get_base_env, get_build_info, get_host_info
 from tinymongo import TinyMongoClient
@@ -47,26 +49,49 @@ class TinyMongoDBBackend:
     def server_database_setup(self):
         # create a database named "admin", "config", "local"
         required_databases = [
-            "admin.$cmd.aggregate",
-            "admin.atlascli",
-            "admin.system.version",
-            "config.system.sessions",
-            "config.transactions",
-            "local.startup_log",
-            "local.system.replset",
+            "admin.database",
+            "config.system",  # configuration parameters
+            "local.startup_log"  # logs
         ]
         for db_str in required_databases:
             database_strs = db_str.split(".")
-            if len(database_strs) != 2:
-                # TODO: understand these confusing structure of database
-                continue
-            else:
-                collection_name, table_name = database_strs
-                # the database will be created automatically when we access it if it doesn't exist
-                collection = getattr(self.backend, collection_name)
-                table = getattr(collection, table_name)
+            collection_name, table_name = database_strs
+            # the database will be created automatically when we access it if it doesn't exist
+            collection = getattr(self.backend, collection_name)
+            table = getattr(collection, table_name)
+            table.find()
+        admin_table = self.backend.admin.database
+        # ignore admin as it is an `inner` database controlled by program
+        admin_table.insert_many([
+            {"name": "config"},
+            {"name": "local"}
+        ])
 
+    def _get_all_databases(self):
+        admin_table = self.backend.admin.database
+        query_result = admin_table.find()
+        all_databases = [db_doc["name"] for db_doc in query_result]
+        return all_databases
 
+    def _get_db_stats(self, database_name):
+        # calculate the stats of a specific database
+        db = getattr(self.backend, database_name)
+        collection_names = db.collection_names()
+        # TODO: implementations
+        return {
+            "db": database_name,
+            "collections": len(collection_names),
+            "objects": 1,
+            "avgObjSize": 59.0,
+            "dataSize": 59.0,
+            "storageSize": 20480.0,
+            "indexes": 1,
+            "indexSize": 20480.0,
+            "totalSize": 40960.0,
+            "scaleFactor": 1,
+            "fsUsedSize": 160507240448.0,
+            "fsTotalSize": 858992406528.0
+        }
 
     def handle_decode(self, op_code, data):
         # used for testing only
@@ -191,18 +216,20 @@ class TinyMongoDBBackend:
                 sections0 = sections[0]
                 # no more to come, handle the payload
                 # handle admin & hello command
-                if "hello" in sections0 and sections0["hello"] == 1:
+                if sections0.get("hello", None) == 1:
                     return_sections = self.handle_msg_hello(payload)
-                elif "ping" in sections0 and sections0["ping"] == 1:
+                elif sections0.get("ping", None) == 1:
                     return_sections = [{"ok": 1.0}]
-                elif "top" in sections0 and sections0["top"] == 1:
+                elif sections0.get("top", None) == 1:
                     return_sections = self.handle_top(payload)
-                elif "buildInfo" in sections0 and sections0["buildInfo"] == 1:
+                elif sections0.get("buildInfo", None) == 1:
                     return_sections = self.handle_buildInfo(payload)
-                elif "hostInfo" in sections0 and sections0["hostInfo"] == 1:
+                elif sections0.get("hostInfo", None) == 1:
                     return_sections = self.handle_hostInfo(payload)
+                elif sections0.get("atlasVersion", None) == 1:
+                    return_sections = self.handle_error("no such command: 'atlasVersion'", 59)
                 else:
-                    return_sections = [{"ok": 1.0}]
+                    return_sections = self.handle_error("Unknown", 0)
 
                 return {
                     "flagBits": return_flags,
@@ -215,13 +242,13 @@ class TinyMongoDBBackend:
     def handle_msg_hello(self, payload):
         base_env_info = get_base_env()
 
-        base_env_info['isWritablePrimary'] = True
-        base_env_info['topologyVersion'] = {
-            'processId': self.object_id,
-            'counter': bson.int64.Int64(0)
+        base_env_info["isWritablePrimary"] = True
+        base_env_info["topologyVersion"] = {
+            "processId": self.object_id,
+            "counter": bson.int64.Int64(0)
         }
-        base_env_info['connectionId'] = self.connection_id
-        base_env_info['ok'] = 1.0
+        base_env_info["connectionId"] = self.connection_id
+        base_env_info["ok"] = 1.0
 
         return [base_env_info]
 
@@ -229,32 +256,92 @@ class TinyMongoDBBackend:
         # hello-master do not support for TinyMongo backend
         # so we just return a fake response
         base_env_info = get_base_env()
-        base_env_info['topologyVersion'] = {
-            'processId': self.object_id,
-            'counter': bson.int64.Int64(0)
+        base_env_info["topologyVersion"] = {
+            "processId": self.object_id,
+            "counter": bson.int64.Int64(0)
         }
-        base_env_info['connectionId'] = self.connection_id
-        base_env_info['ok'] = 1.0
-        base_env_info['helloOk'] = True
-        base_env_info['ismaster'] = True
+        base_env_info["connectionId"] = self.connection_id
+        base_env_info["ok"] = 1.0
+        base_env_info["helloOk"] = True
+        base_env_info["ismaster"] = True
         return {
             "responseFlags": 8,
             "cursorID": 0,
             "startingFrom": 0,
-            'numberReturned': 1,
+            "numberReturned": 1,
             "documents": [base_env_info]
         }
 
     def handle_buildInfo(self, payload):
         build_info = get_build_info()
-        build_info['ok'] = 1.0
+        build_info["ok"] = 1.0
         return [build_info]
 
     def handle_hostInfo(self, payload):
         host_info = get_host_info()
-        host_info['ok'] = 1.0
+        host_info["ok"] = 1.0
         return [host_info]
 
     def handle_top(self, payload):
-        databases = self.backend.list_database_names()
-        return [{}]
+        databases = self._get_all_databases()
+        return_sections = {
+            "totals": {
+                "note": "all times in microseconds",
+            }
+        }
+        for db_name in databases:
+            collection = getattr(self.backend, db_name)
+            for table_name in collection.list_collection_names():
+                table = getattr(collection, table_name)
+                # TODO: do something for time testing
+                result_key = f"{db_name}.{table_name}"
+                result_value = {}
+                for op_name in ["queries", "getmore", "insert", "update", "remove", "commands"]:
+                    result_value[op_name] = {
+                        "time": 0,
+                        "count": 0
+                    }
+                result_value["readLock"] = {
+                    "time": random.randint(800, 1200),
+                    "count": random.randint(10, 100)
+                }
+                result_value["writeLock"] = {
+                    "time": random.randint(800, 1200),
+                    "count": random.randint(10, 100)
+                }
+                result_value["total"] = {
+                    "time": result_value["writeLock"]["time"] + result_value["readLock"]["time"],
+                    "count": result_value["writeLock"]["count"] + result_value["readLock"]["count"]
+                }
+                return_sections["totals"][result_key] = result_value
+        return_sections["ok"] = 1.0
+        return [return_sections]
+
+    def handle_error(self, err_msg, err_code:int):
+        return_sections = {
+            "ok": 0.0,
+            "errmsg": err_msg,
+            "code": err_code,
+            "codeName": get_code_name(ErrorCode, err_code)
+        }
+        return [return_sections]
+
+    def handle_getParameter(self, payload):
+        return [{
+            "ok": 1.0,
+            "featureCompatibilityVersion": {"version": "8.0"}
+        }]
+
+    def handle_listDatabases(self, payload):
+        all_databases = self._get_all_databases()
+        return [{
+            "ok": 1.0,
+            "databases": [
+                {"name": db_name} for db_name in all_databases
+            ]
+        }]
+
+    def handle_dbStats(self, payload):
+        return_section = self._get_db_stats("admin")
+        return_section["ok"] = 1.0
+        return [return_section]
