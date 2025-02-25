@@ -198,8 +198,8 @@ class TinyMongoDBBackend:
 
     def handle_msg(self, data):
         payload = self.op_parser_mapping[OpCode.OP_MSG].do_decode(data)
-        print(payload)
         return_flags = 0
+        self.logger.info(f"Received MSG payload:{payload}")
         if "flagBits" in payload:
             is_checksumPresent = payload["flagBits"] & 1
             is_moreToCome = (payload["flagBits"] >> 1) & 1
@@ -228,6 +228,8 @@ class TinyMongoDBBackend:
                     return_sections = self.handle_hostInfo(payload)
                 elif sections0.get("atlasVersion", None) == 1:
                     return_sections = self.handle_error("no such command: 'atlasVersion'", 59)
+                elif sections0.get("connectionStatus", None) == 1:
+                    return_sections = self.handle_authInfo(payload)
                 else:
                     return_sections = self.handle_error("Unknown", 0)
 
@@ -345,3 +347,14 @@ class TinyMongoDBBackend:
         return_section = self._get_db_stats("admin")
         return_section["ok"] = 1.0
         return [return_section]
+
+    def handle_authInfo(self, payload):
+        # still confusing
+        return [{
+            "authInfo": {
+                "authenticatedUsers": [],
+                "authenticatedUserRoles": [],
+                "authenticatedUserPrivileges": []
+            },
+            "ok": 1.0
+        }]

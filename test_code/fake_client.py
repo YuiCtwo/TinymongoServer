@@ -148,6 +148,7 @@ def thread_function2():
     client.request_any_info(command.payload_getParameter)
     client.request_any_info(command.payload_listDatabases)
     client.request_any_info(command.payload_dbStats)
+    client.request_any_info(command.payload_authInfo)
     client.close()
 
 if __name__ == "__main__":

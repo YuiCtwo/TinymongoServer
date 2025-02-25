@@ -760,6 +760,7 @@ readLock 和 writeLock 指的是读写锁的持有时间和次数。
 ```
 - listDatabases
 `{'listDatabases: 1, 'nameOnly': True}`
+很显然返回所有的数据库集合
 - dbStats
 `{'dbStats': 1}`
 
