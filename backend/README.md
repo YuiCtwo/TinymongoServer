@@ -212,6 +212,9 @@ OP_MSG {
 这块我们留到会话管理模块的时候再实现并重构现在的代码。
 
 # Admin Commands
+- aggregate 命令
+参考 https://www.mongodb.com/zh-cn/docs/manual/reference/command/aggregate/
+又是一个复杂的命令，暂时简化
 ```text
 {
 	'flagBits': 0,
@@ -232,7 +235,6 @@ OP_MSG {
 	}]
 }
 ```
-注意这些命令都是用额外的客户端端口来发送的，请求都长的大同小异。
 
 ```text
 {
@@ -358,7 +360,7 @@ OP_MSG {
 	}]
 }
 ```
-
+注意这些命令都是用额外的客户端端口来发送的，请求都长的大同小异。
 - top
 具体命令参考[官方文档](https://www.mongodb.com/zh-cn/docs/manual/reference/command/top/)
 ```text

@@ -1,5 +1,8 @@
 import datetime
 import platform
+import socket
+
+import bson
 import psutil
 import os
 
@@ -77,10 +80,6 @@ def get_build_info():
         'maxBsonObjectSize': 16777216,
         'storageEngines': ['devnull', 'wiredTiger'],
     }
-    return result
-
-def get_auth_info():
-    result = {}
     return result
 
 if __name__ == '__main__':

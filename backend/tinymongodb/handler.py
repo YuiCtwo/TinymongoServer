@@ -1,6 +1,7 @@
 import random
 import sys
 import time
+import uuid
 
 from datetime import datetime, timezone
 from bson import ObjectId
@@ -14,7 +15,7 @@ from utils.logger import server_logger
 
 class TinyMongoDBBackend:
 
-    def __init__(self):
+    def __init__(self, hostname, port, connection_id=0):
         # get an instance of database in tinymongo
         # see example in https://github.com/schapman1974/tinymongo
         self.logger = server_logger
@@ -41,10 +42,12 @@ class TinyMongoDBBackend:
             OpCode.OP_COMPRESSED: CompressedParser(),
             OpCode.OP_MSG: MSGParser(),
         }
-        self.connection_id = 1
+        self.connection_id = connection_id
         self.object_id = ObjectId()
         # fill up fundamental data in the database
         self.server_database_setup()
+        self.hostname = hostname
+        self.port = port
 
     def server_database_setup(self):
         # create a database named "admin", "config", "local"
@@ -230,6 +233,14 @@ class TinyMongoDBBackend:
                     return_sections = self.handle_error("no such command: 'atlasVersion'", 59)
                 elif sections0.get("connectionStatus", None) == 1:
                     return_sections = self.handle_authInfo(payload)
+                elif sections0.get("getParameter", None) == 1:
+                    return_sections = self.handle_getParameter(payload)
+                elif sections0.get("listDatabases", None) == 1:
+                    return_sections = self.handle_listDatabases(payload)
+                elif sections0.get("dbStats", None) == 1:
+                    return_sections = self.handle_dbStats(payload)
+                elif sections0.get("aggregate", None) == 1:
+                    return_sections = self.handle_agg(payload)
                 else:
                     return_sections = self.handle_error("Unknown", 0)
 
@@ -293,8 +304,8 @@ class TinyMongoDBBackend:
         }
         for db_name in databases:
             collection = getattr(self.backend, db_name)
-            for table_name in collection.list_collection_names():
-                table = getattr(collection, table_name)
+            for table_name in collection.collection_names():
+                # table = getattr(collection, table_name)
                 # TODO: do something for time testing
                 result_key = f"{db_name}.{table_name}"
                 result_value = {}
@@ -358,3 +369,57 @@ class TinyMongoDBBackend:
             },
             "ok": 1.0
         }]
+
+    def handle_agg(self, payload):
+        # client_str = f"{payload['client_address'][0]}:{payload['client_address'][1]}"
+        result = {
+            "cursor": {
+                "firstBatch": [
+                    {
+                        "type": "op",
+                        "host": f"{self.hostname}:{self.port}",
+                        "desc": f"conn{self.connection_id}",
+                        "connectionId": self.connection_id,
+                        "client": "",
+                        "active": True,
+                        "currentOpTime": time.time(),
+                        "isFromUserConnection": True,
+                        "threaded": True,
+                        # ???
+                        "opid": 37888,
+                        "lsid": {
+                            "id": payload["lsid"]["id"],
+                            "uid": bson.Binary.from_uuid(uuid.uuid4())
+                        },
+                        "secs_running": bson.int64.Int64(0),
+                        "microsecs_running": bson.int64.Int64(0),
+                        "op": "command",
+                        "ns": "admin.$cmd.aggregate",
+                        "redacted": False,
+                        "command": payload["sections"][0],
+                        "queryFramework": "classic",
+                        "numYields": 0,
+                        "queues": {
+                            "execution": {
+                                "admissions": 0,
+                                "totalTimeQueuedMicros": bson.int64.Int64(0),
+                            },
+                            "igress": {
+                                "admissions": 1,
+                                "totalTimeQueuedMicros": bson.int64.Int64(0),
+                            }
+                        },
+                        "currentQueue": None,
+                        "locks": {},
+                        "waitingForLock": False,
+                        "lockStats": {},
+                        "waitingForFlowControl": False,
+                        "flowControlStats": {},
+                    },
+
+                ],
+                "id": bson.int64.Int64(0),
+                "ns": "admin.$cmd.aggregate"
+            }
+        }
+        return result

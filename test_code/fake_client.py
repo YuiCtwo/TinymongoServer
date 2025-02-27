@@ -144,6 +144,7 @@ def thread_function2():
     # client.request_top()
     # client.request_hostInfo()
     import json_request.admin_command as command
+    client.request_any_info(command.payload_agg)
     client.request_any_info(command.payload_atlasVersion)
     client.request_any_info(command.payload_getParameter)
     client.request_any_info(command.payload_listDatabases)

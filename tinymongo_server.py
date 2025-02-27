@@ -26,9 +26,11 @@ class TinyMongoServer:
     def __init__(self, host='127.0.0.1', port=27017):
         self.host = host
         self.port = port
-
+        self.hostname = socket.gethostname()
         #
-        self.handler = TinyMongoDBBackend()
+        self.handler = TinyMongoDBBackend(
+            hostname=self.hostname,
+            port=self.port)
         self.logger = server_logger
         self.head_handler = HeadParser()
         # demo list that stores allowed commands
@@ -56,7 +58,7 @@ class TinyMongoServer:
             client_socket, client_address = self.server_socket.accept()
             # receive data from client
             print(f'Accept new connection from {client_address}...')
-            t = threading.Thread(target=self._handle_request, args=(client_socket,))
+            t = threading.Thread(target=self._handle_request, args=(client_socket, client_address, ))
             # self._handle_request(client_socket)
             # make sure that thread ends when the main thread is terminated
             t.daemon = True
@@ -66,19 +68,26 @@ class TinyMongoServer:
     def __del__(self):
         self.server_socket.close()
 
-    def _handle_request(self, client_socket):
+    def _handle_request(self, client_socket, client_address):
         while True:
-            data = client_socket.recv(4096)
-            if not data:
+            try:
+                data = client_socket.recv(4096)
+                if not data:
+                    break
+            except ConnectionResetError as e:
+                self.logger.error(f"Connection closed by client")
+                break
+            except ConnectionAbortedError as e:
+                self.logger.error(f"Connection aborted by client")
                 break
             header = self.head_handler.do_decode(data)
             op_code = header["op_code"]
             request_id = header["request_id"]
-            response_to = header["response_to"]
-            self.logger.info(f"Received request with op_code {op_code}")
+            # self.logger.info(f"Received request with op_code {op_code}")
             if op_code in self.allowed_commands:
                 payload = self.handler.handle_decode(op_code, data)
-                self.logger.info(f"Request header: {header}")
+                # TODO: reorganize code here for adding additional information to payload
+                # payload["client_address"] = client_address
                 self.logger.info(f"Request payload: {payload}")
                 handler_func = self.allowed_commands[op_code]
                 response = handler_func(data)
@@ -95,9 +104,6 @@ class TinyMongoServer:
                 elif op_code == OpCode.OP_MSG:
                     response_raw = self.response_parse_msg(request_id, self.id_generator.get_one(), response)
                     client_socket.sendall(response_raw)
-                #     hello_loop_thread = LoopThread(response["maxAwaitTimeMS"], client_socket, response_raw)
-                #     hello_loop_thread.start()
-                #     self.looper_threads.append(hello_loop_thread)
         client_socket.close()
 
 
